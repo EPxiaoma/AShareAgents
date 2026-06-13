@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import json as _json
@@ -36,14 +36,24 @@ logger = logging.getLogger(__name__)
 
 # 运行期缓存：同一次分析中避免同一数据源重复请求
 
-_run_cache: dict[str, str] = {}
+_run_cache: dict[str, Any] = {}
+_warning_keys: set[str] = set()
 
 
-def _cached(key: str, factory, *args) -> str:
+def _cached(key: str, factory, *args) -> Any:
     """运行期缓存：同一 key 只执行一次 factory，后续直接返回缓存结果。"""
     if key not in _run_cache:
         _run_cache[key] = factory(*args)
     return _run_cache[key]
+
+
+def _warning_once(key: str, message: str, *args) -> None:
+    """同类外部数据源故障只告警一次，后续保留在 debug 日志。"""
+    if key in _warning_keys:
+        logger.debug(message, *args)
+        return
+    _warning_keys.add(key)
+    logger.warning(message, *args)
 
 
 # 股票代码格式与市场识别
@@ -80,6 +90,7 @@ def _normalize_ticker(symbol: str) -> str:
 
 _name_to_code: dict[str, str] | None = None
 _code_to_name: dict[str, str] | None = None
+_api_resolution_cache: dict[str, str | None] = {}
 
 
 def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
@@ -94,6 +105,7 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
     n2c: dict[str, str] = {}
     c2n: dict[str, str] = {}
 
+    map_error: Exception | None = None
     try:
         from mootdx.quotes import Quotes
 
@@ -111,18 +123,20 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
                     clean_name = name.replace(" ", "").replace("　", "")
                     n2c[clean_name] = code
                     c2n[code] = clean_name
-            except Exception:
-                logger.warning(
-                    "mootdx stocks(market=%d) 获取失败，已跳过", market
-                )
-    except Exception:
-        logger.warning(
-            "mootdx 名称-代码映射不可用，将使用 API 回退方案"
-        )
+            except Exception as exc:
+                map_error = exc
+                logger.debug("mootdx stocks(market=%d) 获取失败", market, exc_info=True)
+    except Exception as exc:
+        map_error = exc
+        logger.debug("mootdx 名称-代码映射构建失败", exc_info=True)
 
     _name_to_code = n2c
     _code_to_name = c2n
-    logger.info("已构建股票名称-代码映射：%d 条记录", len(n2c))
+    if n2c:
+        logger.info("已构建股票名称-代码映射：%d 条记录", len(n2c))
+    else:
+        detail = f": {map_error}" if map_error else ""
+        logger.warning("mootdx 名称-代码映射为空，将按需使用 API 回退方案%s", detail)
     return _name_to_code, _code_to_name
 
 
@@ -132,6 +146,10 @@ def _resolve_by_api(keyword: str) -> str | None:
     Returns:
         代码字符串，若未匹配到则返回 None。
     """
+    if keyword in _api_resolution_cache:
+        return _api_resolution_cache[keyword]
+
+    result: str | None = None
     try:
         url = "https://searchapi.eastmoney.com/api/suggest/get"
         params = {
@@ -141,6 +159,7 @@ def _resolve_by_api(keyword: str) -> str | None:
             "count": "5",
         }
         r = _requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
         data = r.json()
         stocks = (
             data.get("QuotationCodeTable", {}).get("Data", [])
@@ -151,11 +170,14 @@ def _resolve_by_api(keyword: str) -> str | None:
             market = str(item.get("MktNum", "")).strip()
             # market: "1"=沪市, "0"=深市, 仅保留6位A股代码
             if _re.match(r"^[036]\d{5}$", code) and market in ("0", "1"):
-                return code
-        return None
-    except Exception:
-        logger.warning("东方财富联想搜索 API 对 %r 的请求失败", keyword)
-        return None
+                result = code
+                break
+    except Exception as exc:
+        logger.warning("东方财富联想搜索 API 对 %r 的请求失败: %s", keyword, exc)
+
+    if result is not None:
+        _api_resolution_cache[keyword] = result
+    return result
 
 
 def resolve_ticker(user_input: str) -> str:
@@ -195,6 +217,9 @@ def resolve_ticker(user_input: str) -> str:
     # 尝试东方财富联想搜索API。
     api_code = _resolve_by_api(clean)
     if api_code:
+        n2c[clean] = api_code
+        if _code_to_name is not None:
+            _code_to_name.setdefault(api_code, clean)
         logger.info("API 解析 %r -> %s", s, api_code)
         return api_code
 
@@ -452,13 +477,20 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
         df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
         df["Date"] = pd.to_datetime(df["Date"])
     except Exception as e:
-        logger.warning("mootdx OHLCV 获取 %s 失败: %s，尝试新浪 HTTP 回退方案", code, e)
+        mootdx_error = e
         # 回退：新浪直连 HTTP API
         try:
             df = _sina_kline_fallback(code)
             if df.empty:
                 raise ValueError(f"新浪未返回 {code} 的 OHLCV 数据")
-        except Exception:
+            logger.info("mootdx OHLCV 获取 %s 失败，已切换到新浪 HTTP 数据源", code)
+        except Exception as fallback_error:
+            logger.warning(
+                "OHLCV 获取 %s 失败：mootdx=%s；新浪=%s",
+                code,
+                mootdx_error,
+                fallback_error,
+            )
             raise ValueError(f"mootdx 和新浪均未返回 {code} 的 OHLCV 数据")
 
     # 缓存到磁盘
@@ -1105,6 +1137,9 @@ def _get_global_news_impl(curr_date: str, look_back_days: int, limit: int) -> st
         cls_params = {"rn": str(limit), "page": "1"}
         cls_headers = {"User-Agent": _UA, "Referer": "https://www.cls.cn/"}
         r_cls = _requests.get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
+        r_cls.raise_for_status()
+        if not r_cls.content.strip():
+            raise ValueError("服务器返回空响应")
         d_cls = r_cls.json()
         for item in d_cls.get("data", {}).get("roll_data", []):
             title = item.get("title", "") or item.get("brief", "")
@@ -1124,7 +1159,7 @@ def _get_global_news_impl(curr_date: str, look_back_days: int, limit: int) -> st
                 "source": "CLS Wire",
             })
     except Exception as e:
-        logger.warning("财联社新闻获取失败: %s", e)
+        _warning_once("cls-news", "财联社新闻获取失败: %s", e)
 
     # 数据源2：东财7x24资讯——直连 HTTP
     try:

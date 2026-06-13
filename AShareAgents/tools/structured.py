@@ -25,6 +25,28 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+_STRUCTURED_DISABLED_MODELS: set[tuple[str, str]] = set()
+
+
+def _model_key(llm: Any) -> tuple[str, str]:
+    """返回足以区分兼容 API 模型配置的稳定键。"""
+    model = str(getattr(llm, "model_name", None) or getattr(llm, "model", ""))
+    base_url = str(
+        getattr(llm, "openai_api_base", None)
+        or getattr(llm, "base_url", None)
+        or ""
+    )
+    return base_url, model
+
+
+def _is_thinking_tool_choice_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "tool_choice" in message and (
+        "thinking mode" in message
+        or "reasoning mode" in message
+        or "does not support" in message
+        or "not support" in message
+    )
 
 
 def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]:
@@ -57,15 +79,24 @@ def invoke_structured_or_freetext(
     或聊天模型接受的消息字典列表）。相同的值会转发到自由文本路径，
     以确保回退时看到的输入与结构化调用一致。
     """
-    if structured_llm is not None:
+    model_key = _model_key(plain_llm)
+    if structured_llm is not None and model_key not in _STRUCTURED_DISABLED_MODELS:
         try:
             result = structured_llm.invoke(prompt)
             return render(result)
         except Exception as exc:
-            logger.warning(
-                "%s: 结构化输出调用失败 (%s)；以自由文本模式重试一次",
-                agent_name, exc,
-            )
+            if _is_thinking_tool_choice_error(exc):
+                _STRUCTURED_DISABLED_MODELS.add(model_key)
+                logger.warning(
+                    "%s: 当前模型的 thinking 模式不支持结构化 tool_choice；"
+                    "本次运行后续 Agent 将直接使用自由文本模式",
+                    agent_name,
+                )
+            else:
+                logger.warning(
+                    "%s: 结构化输出调用失败 (%s)；以自由文本模式重试一次",
+                    agent_name, exc,
+                )
 
     response = plain_llm.invoke(prompt)
     return response.content
