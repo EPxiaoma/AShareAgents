@@ -12,7 +12,15 @@ def _status_badge(status: str) -> str:
         return '<span style="color:#22c55e; font-size:1.3rem;">●</span>'
     if status == "active":
         return '<span style="color:#ff5a1f; font-size:1.3rem;">◉</span>'
-    return '<span style="color:#333; font-size:1.3rem;">○</span>'
+    return '<span style="color:#737373; font-size:1.3rem;">●</span>'
+
+
+def _status_label_color(status: str) -> str:
+    if status == "done":
+        return "#22c55e"
+    if status == "active":
+        return "#f5f1eb"
+    return "#a3a3a3"
 
 
 def _format_time(seconds: float) -> str:
@@ -54,7 +62,7 @@ def render_progress(tracker: ProgressTracker) -> None:
     for col, stage in zip(cols, analyst_stages):
         status = tracker.stage_status(stage["id"])
         badge = _status_badge(status)
-        label_color = "#f5f1eb" if status == "active" else "#888" if status == "pending" else "#22c55e"
+        label_color = _status_label_color(status)
         col.markdown(
             f"""
             <div style="text-align:center; padding:0.5rem 0;">
@@ -74,7 +82,7 @@ def render_progress(tracker: ProgressTracker) -> None:
     for col, stage in zip(cols2, post_stages):
         status = tracker.stage_status(stage["id"])
         badge = _status_badge(status)
-        label_color = "#f5f1eb" if status == "active" else "#888" if status == "pending" else "#22c55e"
+        label_color = _status_label_color(status)
         col.markdown(
             f"""
             <div style="text-align:center; padding:0.5rem 0;">

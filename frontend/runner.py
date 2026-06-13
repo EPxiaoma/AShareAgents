@@ -61,6 +61,12 @@ def _detect_completed_stages(
 def _infer_active_stage(tracker: ProgressTracker) -> None:
     """将当前阶段设为第一个未完成的阶段。"""
     from frontend.progress import STAGE_IDS
+
+    # 流式输出可能包含工具调用等中间块。当前阶段尚未产出报告时，
+    # 应继续保持 active，不能因为收到一个中间块就跳到后续阶段。
+    if tracker.current_stage and tracker.stage_status(tracker.current_stage) == "active":
+        return
+
     for sid in STAGE_IDS:
         if tracker.stage_status(sid) == "pending":
             tracker.mark_stage_active(sid)

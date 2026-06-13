@@ -15,7 +15,7 @@ git clone https://github.com/EPxiaoma/AShareAgents.git
 ```
 2. 进入项目目录：
 ```bash
-cd TradingAgents
+cd AShareAgents
 ```
 3. 创建虚拟环境（以 uv 为例）：
 ```bash
@@ -48,31 +48,39 @@ streamlit run frontend/app.py
 
 ### 支持的 LLM 提供商
 
-| 提供商类型   | 示例服务                               | 配置示例                             |
-| ------------ | -------------------------------------- | ------------------------------------ |
-| | |     |
-||                  |  |
-| |                |        |
+| 提供商           | 接入方式 / 示例模型                  | 环境变量 |
+|---------------|------------------------------| --- |
+| OpenAI        | GPT 系列 / 原生 Responses API    | `OPENAI_API_KEY` |
+| Anthropic     | Claude 系列                    | `ANTHROPIC_API_KEY` |
+| Google Gemini | Gemini 系列（需安装 `google` 可选依赖） | `GOOGLE_API_KEY` |
+| DeepSeek      | DeepSeek Chat / Reasoner     | `DEEPSEEK_API_KEY` |
+| Qwen          | DashScope OpenAI 兼容接口        | `DASHSCOPE_API_KEY` |
+| GLM           | 智谱 OpenAI 兼容接口               | `ZHIPU_API_KEY` |
+| MiniMax       | MiniMax OpenAI 兼容接口          | `MINIMAX_API_KEY` |
+| xAI           | Grok 系列                      | `XAI_API_KEY` |
+
 
 ## 🏗️ 项目结构
 ```
 AShareAgents/
-├── app/              
-│   ├── api/                      # FastAPI API层
-│   ├── LLM/                      # 大模型管理
-│   ├── agents/                   # Agent 实现
-│   ├── tools/                    # 工具系统
+├── AShareAgents/                 # 核心 Python 包
+│   ├── agents/                   # 分析师、研究员、交易员与风控 Agent
+│   ├── api/                      # API 模块
 │   ├── context/                  # 上下文工程
+│   ├── datasource/               # 数据源
+│   ├── llm/                      # LLM 客户端、工厂与模型目录
 │   ├── memory/                   # 记忆系统
-│   ├── rag/                      # RAG 系统
-│   └── skills/                   # Skills 系统
-├── frontend/                     # 前端
-├── docs/                         # 文档
-├── examples/                     # 测试用例
-├── tests/                        # 示例代码
-├── .evn.example                  # 环境变量
-├── pyproject.toml                # 项目配置
-├── uc.lock                       # 依赖锁文件
-├── .gitignore                    # git 忽略文件
-└── README.md                     # 项目描述
+│   ├── models/                   # 结构化输出数据模型
+│   ├── rag/                      # RAG 模块
+│   ├── storage/                  # 存储模块
+│   ├── tools/                    # Agent 工具与数据工具
+│   ├── workflows/                # LangGraph 工作流编排
+│   ├── config.py                 # 默认运行配置
+│   └── logging_config.py         # 日志配置
+├── frontend/                     # Streamlit 前端
+├── .env.example                  # 环境变量示例
+├── main.py                       # 示例入口
+├── pyproject.toml                # 项目与依赖配置
+├── requirements.txt              # 依赖清单
+└── README.md                     # 项目说明
 ```

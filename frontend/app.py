@@ -32,7 +32,7 @@ from frontend.runner import run_analysis_in_thread  # noqa: E402
 # 页面配置
 
 st.set_page_config(
-    page_title="AShareAgents-Astock A股分析",
+    page_title="AShareAgents A股分析",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -206,6 +206,28 @@ if start_req:
 tracker: ProgressTracker | None = st.session_state.get("tracker")
 viewing_history: str | None = st.session_state.get("viewing_history")
 
+
+def _render_disclaimer() -> None:
+    """在主页面内容底部渲染投资风险声明。"""
+    st.markdown(
+        """
+        <div style="
+            margin: 2.5rem auto 0;
+            padding: 0.8rem 1.5rem;
+            color: #555;
+            font-size: 0.75rem;
+            max-width: 500px;
+            line-height: 1.6;
+            text-align: center;
+            border-top: 1px solid #1a1a1a;
+        ">
+            ⚠️ 本项目仅供学习研究与技术演示，不构成任何投资建议。<br>
+            投资决策请咨询持牌专业机构。作者不对使用本工具产生的任何损失承担责任。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # 历史结果优先于当前任务状态展示。
 if viewing_history:
     try:
@@ -219,6 +241,7 @@ if viewing_history:
 
 elif tracker and tracker.is_running:
     render_progress(tracker)
+    _render_disclaimer()
     time.sleep(2)
     st.rerun()
 
@@ -254,35 +277,15 @@ else:
                 font-weight: 900;
                 margin-bottom: 0.5rem;
             ">
-                <span style="color: #ff5a1f;">Trading</span><span style="color: #f5f1eb;">Agents</span><span style="color: #f5f1eb;">-</span><span style="color: #ff5a1f;">Astock</span>
+                <span style="color: #ff5a1f;">AShare</span><span style="color: #f5f1eb;">Agents</span>
             </div>
             <div style="color: #888; font-size: 1.1rem; max-width: 500px; line-height: 1.6;">
                 A股多Agent投研分析系统<br>
                 7位AI分析师 → 质量门控 → 多空辩论 → 风控评估 → 最终决策
             </div>
-            <div style="
-                margin-top: 2rem;
-                padding: 1rem 2rem;
-                border: 1px solid #222;
-                border-radius: 12px;
-                color: #666;
-                font-size: 0.9rem;
-            ">
-                ← 在左侧输入股票代码，开始分析
-            </div>
-            <div style="
-                margin-top: 2.5rem;
-                padding: 0.8rem 1.5rem;
-                color: #555;
-                font-size: 0.75rem;
-                max-width: 500px;
-                line-height: 1.6;
-                border-top: 1px solid #1a1a1a;
-            ">
-                ⚠️ 本项目仅供学习研究与技术演示，不构成任何投资建议。<br>
-                投资决策请咨询持牌专业机构。作者不对使用本工具产生的任何损失承担责任。
-            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+_render_disclaimer()

@@ -62,7 +62,8 @@ class ProgressTracker:
                 self.completed_stages.append(stage_id)
             if report:
                 self.stage_reports[stage_id] = report
-            self.current_stage = ""
+            if self.current_stage == stage_id:
+                self.current_stage = ""
 
     def mark_complete(self, final_state: dict, signal: str) -> None:
         with self._lock:
