@@ -1,3 +1,5 @@
+"""根据供应商名称创建统一的 LLM 客户端。"""
+
 from typing import Optional
 
 from .base_client import BaseLLMClient

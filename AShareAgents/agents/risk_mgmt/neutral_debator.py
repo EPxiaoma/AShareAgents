@@ -1,3 +1,5 @@
+"""创建中性风险观点节点，在收益机会与风险约束之间进行权衡。"""
+
 def create_neutral_debator(llm):
     def neutral_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]

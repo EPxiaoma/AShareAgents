@@ -1,3 +1,5 @@
+"""定义 LLM 客户端的统一抽象接口与共享配置。"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 import warnings

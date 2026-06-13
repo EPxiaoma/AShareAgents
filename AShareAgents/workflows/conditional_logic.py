@@ -1,6 +1,7 @@
-# 条件路由模块：负责工作流图中的条件分支和跳转逻辑。
-# 提供ConditionalLogic类，封装分析师节点的工具调用判断、多空辩论轮次控制，
-# 以及风险分析辩论的流转规则。
+"""定义 LangGraph 工作流的条件路由规则。
+
+该模块统一控制工具调用、多空辩论和风险讨论的节点流转。
+"""
 
 from AShareAgents.tools.agent_states import AgentState
 

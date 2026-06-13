@@ -1,3 +1,5 @@
+"""向 Agent 暴露公司新闻、全球新闻和内部人交易工具。"""
+
 from langchain_core.tools import tool
 from typing import Annotated
 from AShareAgents.datasource.interface import route_to_vendor

@@ -62,13 +62,13 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: 过滤后的OHLCV数据
     """
-    # 拒绝可能通过缓存文件名逃逸目标目录的代码值
+    # 股票代码会进入缓存文件名，必须先阻止路径逃逸。
     safe_symbol = safe_ticker_component(symbol)
 
     config = get_config()
     curr_date_dt = pd.to_datetime(curr_date)
 
-    # 缓存使用固定窗口（5年至今天），每个代码对应一个文件
+    # 每个股票代码使用固定五年窗口缓存，避免相同标的重复下载。
     today_date = pd.Timestamp.today()
     start_date = today_date - pd.DateOffset(years=5)
     start_str = start_date.strftime("%Y-%m-%d")
@@ -96,7 +96,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
 
     data = _clean_dataframe(data)
 
-    # 过滤到curr_date以防止回测中的前视偏差
+    # 截止到分析日期，避免回测使用未来数据。
     data = data[data["Date"] <= curr_date_dt]
 
     return data

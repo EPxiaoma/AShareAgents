@@ -1,3 +1,5 @@
+"""封装 OpenAI 及其兼容 Chat Completions API 的客户端配置。"""
+
 import os
 from typing import Any, Optional
 

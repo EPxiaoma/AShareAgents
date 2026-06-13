@@ -29,7 +29,7 @@ from frontend.history import extract_signal, load_analysis  # noqa: E402
 from frontend.progress import ProgressTracker  # noqa: E402
 from frontend.runner import run_analysis_in_thread  # noqa: E402
 
-# ── 页面配置 ──────────────────────────────────────────────────────────────
+# 页面配置
 
 st.set_page_config(
     page_title="AShareAgents-Astock A股分析",
@@ -38,7 +38,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── 自定义 CSS ───────────────────────────────────────────────────────────────
+# 界面样式
 
 st.markdown(
     """
@@ -155,14 +155,14 @@ st.markdown(
 )
 
 
-# ── 构建配置 ─────────────────────────────────────────────────────────────
+# 运行配置
 
 def _build_config() -> dict:
     config = DEFAULT_CONFIG.copy()
     config["llm_provider"] = st.session_state.get("llm_provider", "minimax")
     config["deep_think_llm"] = st.session_state.get("deep_think_llm", "MiniMax-M2.7")
     config["quick_think_llm"] = st.session_state.get("quick_think_llm", "MiniMax-M2.7-highspeed")
-    # 可选第三方/代理端点。侧边栏输入优先，否则使用 .env 里的 BACKEND_URL。
+    # 侧边栏显式输入优先于环境变量，便于临时切换代理端点。
     backend_url = (st.session_state.get("llm_base_url") or os.getenv("BACKEND_URL") or "").strip()
     config["backend_url"] = backend_url or None
     config["data_vendors"] = {
@@ -178,13 +178,13 @@ def _build_config() -> dict:
     return config
 
 
-# ── 侧边栏 ──────────────────────────────────────────────────────────────────
+# 侧边栏
 
 with st.sidebar:
     render_sidebar()
 
 
-# ── 处理"开始分析"触发 ──────────────────────────────────────────────────────────
+# 启动分析任务
 
 start_req = st.session_state.pop("start_analysis", None)
 if start_req:
@@ -201,12 +201,12 @@ if start_req:
     )
 
 
-# ── 主区域状态机 ─────────────────────────────────────────────────
+# 主区域状态机
 
 tracker: ProgressTracker | None = st.session_state.get("tracker")
 viewing_history: str | None = st.session_state.get("viewing_history")
 
-# 状态 1：查看历史分析
+# 历史结果优先于当前任务状态展示。
 if viewing_history:
     try:
         state = load_analysis(viewing_history)
@@ -217,13 +217,11 @@ if viewing_history:
     except Exception as exc:
         st.error(f"加载失败: {exc}")
 
-# 状态 2：分析运行中
 elif tracker and tracker.is_running:
     render_progress(tracker)
     time.sleep(2)
     st.rerun()
 
-# 状态 3：分析完成
 elif tracker and tracker.is_complete:
     render_report(
         tracker.final_state,
@@ -233,14 +231,12 @@ elif tracker and tracker.is_complete:
         elapsed=tracker.elapsed,
     )
 
-# 状态 4：分析出错
 elif tracker and tracker.error:
     st.error(f"分析失败: {tracker.error}")
     if st.button("重试"):
         st.session_state.pop("tracker", None)
         st.rerun()
 
-# 状态 0：空闲 — 欢迎界面
 else:
     st.markdown(
         """

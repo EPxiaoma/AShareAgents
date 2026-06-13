@@ -34,9 +34,7 @@ from ..utils import safe_ticker_component
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
 # 运行期缓存：同一次分析中避免同一数据源重复请求
-# ---------------------------------------------------------------------------
 
 _run_cache: dict[str, str] = {}
 
@@ -48,9 +46,7 @@ def _cached(key: str, factory, *args) -> str:
     return _run_cache[key]
 
 
-# ---------------------------------------------------------------------------
-# 工具函数：代码格式 & 市场识别
-# ---------------------------------------------------------------------------
+# 股票代码格式与市场识别
 
 def _get_prefix(code: str) -> str:
     """6位A股代码 -> 腾讯API所需的市场前缀。"""
@@ -80,9 +76,7 @@ def _normalize_ticker(symbol: str) -> str:
     return safe_ticker_component(s)
 
 
-# ---------------------------------------------------------------------------
-# 股票名称 <-> 代码映射（缓存）
-# ---------------------------------------------------------------------------
+# 股票名称与代码映射缓存
 
 _name_to_code: dict[str, str] | None = None
 _code_to_name: dict[str, str] | None = None
@@ -207,9 +201,7 @@ def resolve_ticker(user_input: str) -> str:
     raise ValueError(f"找不到股票 '{s}'，请检查名称是否正确")
 
 
-# ---------------------------------------------------------------------------
-# mootdx 客户端（单例）
-# ---------------------------------------------------------------------------
+# mootdx 客户端在进程内复用，避免重复建立连接。
 
 _mootdx_client = None
 
@@ -224,9 +216,7 @@ def _get_mootdx_client():
     return _mootdx_client
 
 
-# ---------------------------------------------------------------------------
 # 腾讯财经 API
-# ---------------------------------------------------------------------------
 
 def _tencent_quote(codes: list[str]) -> dict[str, dict]:
     """从腾讯财经 (qt.gtimg.cn) 批量获取实时行情。
@@ -270,36 +260,26 @@ def _tencent_quote(codes: list[str]) -> dict[str, dict]:
     return result
 
 
-# ---------------------------------------------------------------------------
 # 东方财富数据中心统一查询接口（龙虎榜/解禁 等公用）
-# ---------------------------------------------------------------------------
 
 _DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 
-# ---------------------------------------------------------------------------
-# 东财防封：全局节流 + 会话复用
-# ---------------------------------------------------------------------------
-# 东财系 HTTP 接口（push2 / push2his / datacenter-web / search-api / np-weblist）
-# 有风控：每秒 >5 次 / 单 IP 并发 >=10 / 1 分钟 >=200 次 / 5 分钟 >=300 次 -> 临时封 IP。
-# 多 Agent 投研跑批量分析时会高频请求东财，是被封的头号元凶。所有 eastmoney.com
-# 请求一律走 _em_get()：串行限流（最小间隔 + 随机抖动）+ 复用 Keep-Alive 会话 + 默认 UA。
-# 注意：仅东财接口走此入口；mootdx(TCP) / 腾讯 / 新浪 / 同花顺 / 财联社 / 百度 等
-# 不限流（实测不封 IP 或风控极弱）。批量任务可调大 EM_MIN_INTERVAL 进一步降速。
+# 东方财富请求节流与会话复用
+# 所有 eastmoney.com HTTP 请求统一串行节流，降低多 Agent 并发触发临时封禁的概率。
+# 其他数据源不经过此入口；批量任务可通过 EM_MIN_INTERVAL 调高请求间隔。
 _EM_SESSION = _requests.Session()
 _EM_SESSION.headers.update({"User-Agent": _UA})
-# 两次东财请求最小间隔(秒)；批量多 Agent 场景可设环境变量 EM_MIN_INTERVAL=1.5~2 降速。
+# 两次请求的最小间隔可由环境变量覆盖。
 _EM_MIN_INTERVAL = float(os.environ.get("EM_MIN_INTERVAL", "1.0"))
-_em_last_call = [0.0]  # 模块级：上次东财请求完成的时间戳
+_em_last_call = [0.0]
 
 
 def _em_get(url, params=None, headers=None, timeout=15, **kwargs):
-    """东财统一请求入口：自动节流 + 复用 session + 默认 UA。
+    """请求东方财富接口，并执行串行节流和随机抖动。
 
-    所有 eastmoney.com 接口都应通过它请求，避免多 Agent 高频拉数据被封 IP。
-    串行限流：与上次东财请求间隔 < EM_MIN_INTERVAL 时 sleep 补足 + 0.1~0.5s 随机抖动。
-    传入的 headers 会覆盖 session 默认 UA（用于保留各端点自己的 Referer/Origin）。
+    传入的 headers 会覆盖会话默认值，以保留端点要求的 Referer 或 Origin。
     """
     wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
     if wait > 0:
@@ -339,9 +319,7 @@ def _eastmoney_datacenter(
     return []
 
 
-# ---------------------------------------------------------------------------
 # 同花顺 EPS 一致预期辅助函数（直连 HTTP，无 akshare）
-# ---------------------------------------------------------------------------
 
 
 def _ths_eps_forecast(code: str) -> pd.DataFrame:
@@ -372,9 +350,7 @@ def _ths_eps_forecast(code: str) -> pd.DataFrame:
     return dfs[0] if dfs else pd.DataFrame()
 
 
-# ---------------------------------------------------------------------------
 # 新浪 K线备用源（直连 HTTP，无 akshare）
-# ---------------------------------------------------------------------------
 
 
 def _sina_kline_fallback(code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
@@ -423,9 +399,7 @@ def _sina_kline_fallback(code: str, start_date: str = None, end_date: str = None
     return df
 
 
-# ---------------------------------------------------------------------------
-# OHLCV 数据加载（带缓存：mootdx -> CSV）
-# ---------------------------------------------------------------------------
+# OHLCV 数据优先从 mootdx 获取，并以 CSV 缓存。
 
 def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
     """通过 mootdx 获取 OHLCV，缓存至 CSV，按 curr_date 过滤。
@@ -495,9 +469,7 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
     return df[df["Date"] <= cutoff]
 
 
-# ===========================================================================
-# 供应商方法（与 interface.py VENDOR_METHODS 签名匹配）
-# ===========================================================================
+# 以下供应商方法必须与 interface.py 的 VENDOR_METHODS 签名保持一致。
 
 
 # ---- 1. get_stock_data ----

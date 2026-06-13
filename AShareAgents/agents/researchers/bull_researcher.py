@@ -1,3 +1,5 @@
+"""创建多头研究节点，基于现有报告论证潜在投资价值。"""
+
 def create_bull_researcher(llm):
     def bull_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]

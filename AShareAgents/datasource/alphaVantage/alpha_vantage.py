@@ -1,4 +1,5 @@
-# 从各专用模块导入函数
+"""集中导出 Alpha Vantage 各类数据查询函数。"""
+
 from .alpha_vantage_stock import get_stock
 from .alpha_vantage_indicator import get_indicator
 from .alpha_vantage_fundamentals import get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement

@@ -1,4 +1,4 @@
-# AShareAgents/graph/__init__.py
+"""导出工作流编排、路由、传播与反思组件。"""
 
 from .trading_graph import AShareAgentsGraph
 from .conditional_logic import ConditionalLogic

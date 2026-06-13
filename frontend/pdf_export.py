@@ -12,11 +12,7 @@ import fpdf as _fpdf_mod
 from fpdf import FPDF
 
 
-# fpdf2（社区维护的分支）和已被废弃的 pyfpdf 1.x 都以 `fpdf` 命名导入，
-# 同时安装两者时，磁盘上最后安装的会覆盖另一个。pyfpdf 1.x 将每页编码为
-# latin-1，因此任何中文字符都会在库内部抛出神秘的
-# `UnicodeEncodeError: 'latin-1' codec can't encode` 错误（issue #54）。
-# 这里提前检测错误的库版本，并告诉用户如何修复，而不是在 PDF 渲染中途崩溃。
+# fpdf2 与废弃的 pyfpdf 共用导入名；提前识别旧版本，避免中文渲染时才失败。
 _FPDF_VERSION = getattr(_fpdf_mod, "__version__", None) or getattr(_fpdf_mod, "FPDF_VERSION", "0")
 
 
@@ -35,8 +31,7 @@ def _ensure_fpdf2() -> None:
         )
 
 
-# 各操作系统的 CJK 字体候选列表。优先尝试当前操作系统的字体，
-# 这样 Windows/Linux/macOS 用户无需手动配置即可获得可用的 PDF。
+# 按操作系统优先级查找 CJK 字体，尽量避免要求用户手动配置。
 _WIN_FONTS = [
     "C:/Windows/Fonts/msyh.ttc",      # 微软雅黑
     "C:/Windows/Fonts/msyhbd.ttc",    # 微软雅黑 Bold
@@ -60,8 +55,7 @@ _LINUX_FONTS = [
     "/usr/share/fonts/truetype/arphic/uming.ttc",
 ]
 
-# 在递归扫描中，下列子字符串可可靠标识支持 CJK 的字体
-#（刻意排除 "noto"，因为它也会匹配仅支持拉丁字符的 Noto 系列）。
+# 仅匹配明确支持 CJK 的字体名，避免误选只含拉丁字符的 Noto 字体。
 _CJK_FONT_KEYWORDS = (
     "msyh", "simhei", "simsun", "simfang", "yahei", "fangsong",
     "pingfang", "heiti", "stheiti", "stsong", "songti", "kaiti",
@@ -241,13 +235,12 @@ class _ReportPDF(FPDF):
             line = lines[i]
             stripped = line.strip()
 
-            # 空行 → 添加小间距
             if not stripped:
                 self.ln(3)
                 i += 1
                 continue
 
-            # 标题：### → 11pt，## → 13pt，# → 14pt
+        # Markdown 标题层级映射到固定字号。
             if stripped.startswith("###"):
                 self._use_font("B", 11)
                 self.set_text_color(50, 50, 50)
@@ -270,7 +263,6 @@ class _ReportPDF(FPDF):
                 i += 1
                 continue
 
-            # 水平分割线
             if stripped in ("---", "***", "___"):
                 self.set_draw_color(180, 180, 180)
                 y = self.get_y() + 2
@@ -279,7 +271,6 @@ class _ReportPDF(FPDF):
                 i += 1
                 continue
 
-            # 列表项（-、*、数字列表）
             if re.match(r"^[-*]\s", stripped) or re.match(r"^\d+[.)]\s", stripped):
                 self._use_font("", 10)
                 self.set_text_color(40, 40, 40)
@@ -296,9 +287,8 @@ class _ReportPDF(FPDF):
                 i += 1
                 continue
 
-            # 表格行（|col|col|）→ 渲染为带间距的纯文本
+        # 简单表格按纯文本渲染，避免引入复杂布局依赖。
             if stripped.startswith("|") and stripped.endswith("|"):
-                # 跳过分隔行，如 |---|---|
                 if re.match(r"^\|[-:\s|]+\|$", stripped):
                     i += 1
                     continue
@@ -311,7 +301,7 @@ class _ReportPDF(FPDF):
                 i += 1
                 continue
 
-            # 普通段落 — 收集连续的非特殊行
+        # 连续普通行合并为段落，减少不必要的换行。
             para_lines = []
             while i < len(lines):
                 ln = lines[i].strip()

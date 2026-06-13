@@ -1,3 +1,5 @@
+"""创建空头研究节点，基于现有报告论证潜在下行风险。"""
+
 def create_bear_researcher(llm):
     def bear_node(state) -> dict:
         investment_debate_state = state["investment_debate_state"]

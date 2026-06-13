@@ -1,3 +1,5 @@
+"""收集并汇总分析流程中的 LLM 与工具调用统计。"""
+
 import threading
 from typing import Any, Dict, List, Union
 

@@ -1,6 +1,7 @@
-# 状态传播模块：负责工作流图的初始状态创建和图调用参数管理。
-# 提供Propagator类，封装AgentState的初始化逻辑（包括多空辩论和风险辩论的初始状态），
-# 并统一管理图的递归限制和回调参数。
+"""构造工作流初始状态并执行图调用。
+
+该模块集中管理辩论子状态、递归限制和运行时回调参数。
+"""
 
 from typing import Dict, Any, List, Optional
 from AShareAgents.tools.agent_states import (

@@ -1,3 +1,5 @@
+"""封装 Azure OpenAI 客户端及部署端点配置。"""
+
 import os
 from typing import Any, Optional
 

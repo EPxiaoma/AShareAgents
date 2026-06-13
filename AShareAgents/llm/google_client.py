@@ -1,3 +1,5 @@
+"""封装 Google Gemini 客户端及其推理参数映射。"""
+
 from typing import Any, Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI

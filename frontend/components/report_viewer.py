@@ -75,8 +75,7 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Markdown 导出始终可用（无需字体依赖）；PDF 延迟生成并受保护，
-    # 即使 PDF/字体异常也不会导致结果页面崩溃。
+    # Markdown 无字体依赖；PDF 延迟生成，失败时不影响结果页面。
     col_md, col_pdf, col_spacer = st.columns([1, 1, 2])
     with col_md:
         md_text = generate_markdown(final_state, ticker, trade_date, signal)
@@ -97,7 +96,7 @@ def render_report(
                 mime="application/pdf",
                 use_container_width=True,
             )
-        except Exception as exc:  # noqa: BLE001 — 绝不让 PDF 异常导致页面崩溃
+        except Exception as exc:  # noqa: BLE001 - PDF 导出异常不得中断结果展示。
             st.button(
                 "📄 PDF 不可用",
                 disabled=True,

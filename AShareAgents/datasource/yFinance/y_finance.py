@@ -24,29 +24,24 @@ def get_YFin_data_online(
     datetime.strptime(start_date, "%Y-%m-%d")
     datetime.strptime(end_date, "%Y-%m-%d")
 
-    # 创建股票代码对象
     ticker = yf.Ticker(symbol.upper())
 
-    # 获取指定日期范围的历史数据
     data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
 
-    # 检查数据是否为空
     if data.empty:
         return (
             f"在 {start_date} 至 {end_date} 期间未找到股票代码 '{symbol}' 的数据"
         )
 
-    # 移除索引中的时区信息，以便更清晰地展示
+        # 移除时区，确保不同数据源输出的日期格式一致。
     if data.index.tz is not None:
         data.index = data.index.tz_localize(None)
 
-    # 将数值列舍入到2位小数，便于显示
     numeric_columns = ["Open", "High", "Low", "Close", "Adj Close"]
     for col in numeric_columns:
         if col in data.columns:
             data[col] = data[col].round(2)
 
-    # 将DataFrame转换为CSV字符串
     csv_string = data.to_csv()
 
     # 添加头部信息
@@ -147,18 +142,16 @@ def get_stock_stats_indicators_window(
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     before = curr_date_dt - relativedelta(days=look_back_days)
 
-    # 优化：一次获取股票数据，计算所有日期的指标
+    # 一次加载完整窗口，避免为每个交易日重复请求行情。
     try:
         indicator_data = _get_stock_stats_bulk(symbol, indicator, curr_date)
 
-        # 生成所需的日期范围
         current_dt = curr_date_dt
         date_values = []
 
         while current_dt >= before:
             date_str = current_dt.strftime('%Y-%m-%d')
 
-            # 查找该日期的指标值
             if date_str in indicator_data:
                 indicator_value = indicator_data[date_str]
             else:
@@ -167,14 +160,13 @@ def get_stock_stats_indicators_window(
             date_values.append((date_str, indicator_value))
             current_dt = current_dt - relativedelta(days=1)
 
-        # 构建结果字符串
         ind_string = ""
         for date_str, value in date_values:
             ind_string += f"{date_str}: {value}\n"
 
     except Exception as e:
         logger.warning("批量获取 stockstats 数据失败: %s", e)
-        # 批量方法失败时回退到原始实现
+        # 批量计算失败时回退到逐日实现，优先保证工具可用性。
         ind_string = ""
         curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
         while curr_date_dt >= before:
@@ -199,9 +191,7 @@ def _get_stock_stats_bulk(
     indicator: Annotated[str, "需要计算的技术指标"],
     curr_date: Annotated[str, "参考当前日期"]
 ) -> dict:
-    """批量计算stockstats技术指标（优化版）。
-
-    一次性获取数据，为所有可用日期计算指标值。
+    """一次加载行情并计算全部可用日期的 stockstats 指标。
 
     Args:
         symbol: 公司股票代码
@@ -209,7 +199,7 @@ def _get_stock_stats_bulk(
         curr_date: 参考当前日期
 
     Returns:
-        dict: 日期字符串到指标值的映射
+        日期字符串到指标值的映射。
     """
     from stockstats import wrap
 
@@ -217,16 +207,14 @@ def _get_stock_stats_bulk(
     df = wrap(data)
     df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
 
-    # 一次性计算所有行的指标
-    df[indicator]  # 触发 stockstats 计算指标
+    # 访问指标列会触发 stockstats 的惰性计算。
+    df[indicator]
 
-    # 创建日期字符串到指标值的映射字典
     result_dict = {}
     for _, row in df.iterrows():
         date_str = row["Date"]
         indicator_value = row[indicator]
 
-        # 处理 NaN/None 值
         if pd.isna(indicator_value):
             result_dict[date_str] = "不适用"
         else:
@@ -341,7 +329,6 @@ def get_balance_sheet(
         # 转换为CSV字符串以保持与其他函数一致
         csv_string = data.to_csv()
 
-        # 添加头部信息
         header = f"# {ticker.upper()} 资产负债表数据 ({freq})\n"
         header += f"# 数据获取时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
 

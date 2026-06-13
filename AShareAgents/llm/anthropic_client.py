@@ -1,3 +1,5 @@
+"""封装 Anthropic Claude 客户端及其供应商专用参数。"""
+
 from typing import Any, Optional
 
 from langchain_anthropic import ChatAnthropic

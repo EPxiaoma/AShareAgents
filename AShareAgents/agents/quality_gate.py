@@ -1,3 +1,8 @@
+"""评估分析师报告的完整性与可用性。
+
+质量门控结合硬性规则和 LLM 评审，为后续研究阶段提供统一的数据质量摘要。
+"""
+
 from typing import Annotated
 
 REPORT_FIELDS = {

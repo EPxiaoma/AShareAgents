@@ -1,3 +1,5 @@
+"""向 Agent 暴露财务报表与基本面数据工具。"""
+
 from langchain_core.tools import tool
 from typing import Annotated
 from AShareAgents.datasource.interface import route_to_vendor

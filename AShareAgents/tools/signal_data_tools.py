@@ -1,3 +1,5 @@
+"""向 Agent 暴露 A 股题材、资金流向和事件信号工具。"""
+
 from langchain_core.tools import tool
 from typing import Annotated
 from AShareAgents.datasource.interface import route_to_vendor

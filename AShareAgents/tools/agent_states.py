@@ -1,46 +1,46 @@
+"""定义 LangGraph 节点之间共享的状态结构。"""
+
 from typing import Annotated
 from typing_extensions import TypedDict
 from langgraph.graph import MessagesState
 
 
-# 研究员团队状态
 class InvestDebateState(TypedDict):
     bull_history: Annotated[
         str, "多头对话历史"
-    ]  # 多头对话历史
+    ]
     bear_history: Annotated[
         str, "空头对话历史"
-    ]  # 空头对话历史
-    history: Annotated[str, "对话历史"]  # 对话历史
-    current_response: Annotated[str, "最近一次回复"]  # 最近一次回复
-    judge_decision: Annotated[str, "最终评判结果"]  # 最终评判结果
-    count: Annotated[int, "当前对话轮数"]  # 对话轮数
+    ]
+    history: Annotated[str, "对话历史"]
+    current_response: Annotated[str, "最近一次回复"]
+    judge_decision: Annotated[str, "最终评判结果"]
+    count: Annotated[int, "当前对话轮数"]
 
 
-# 风险管理团队状态
 class RiskDebateState(TypedDict):
     aggressive_history: Annotated[
         str, "激进分析师的对话历史"
-    ]  # 对话历史
+    ]
     conservative_history: Annotated[
         str, "保守分析师的对话历史"
-    ]  # 对话历史
+    ]
     neutral_history: Annotated[
         str, "中立分析师的对话历史"
-    ]  # 对话历史
-    history: Annotated[str, "对话历史"]  # 对话历史
+    ]
+    history: Annotated[str, "对话历史"]
     latest_speaker: Annotated[str, "最近发言的分析师"]
     current_aggressive_response: Annotated[
         str, "激进分析师的最新回复"
-    ]  # 最近一次回复
+    ]
     current_conservative_response: Annotated[
         str, "保守分析师的最新回复"
-    ]  # 最近一次回复
+    ]
     current_neutral_response: Annotated[
         str, "中立分析师的最新回复"
-    ]  # 最近一次回复
+    ]
     judge_decision: Annotated[str, "评委的决定"]
-    count: Annotated[int, "当前对话轮数"]  # 对话轮数
+    count: Annotated[int, "当前对话轮数"]
 
 
 class AgentState(MessagesState):

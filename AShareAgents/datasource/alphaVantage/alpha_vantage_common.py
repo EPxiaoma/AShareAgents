@@ -25,10 +25,8 @@ def get_api_key() -> str:
 def format_datetime_for_api(date_input) -> str:
     """将多种日期格式转换为Alpha Vantage API要求的YYYYMMDDTHHMM格式。"""
     if isinstance(date_input, str):
-        # 如果已经是正确格式，直接返回
         if len(date_input) == 13 and 'T' in date_input:
             return date_input
-        # 尝试解析常见日期格式
         try:
             dt = datetime.strptime(date_input, "%Y-%m-%d")
             return dt.strftime("%Y%m%dT0000")
@@ -60,7 +58,7 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
     Raises:
         AlphaVantageRateLimitError: API请求频率超限时抛出
     """
-    # 复制参数以避免修改原始字典
+    # 复制参数，避免调用方的配置被原地修改。
     api_params = params.copy()
     api_params.update({
         "function": function_name,
@@ -68,14 +66,12 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         "source": "ashare_agents",
     })
 
-    # 处理entitlement参数
     current_entitlement = globals().get('_current_entitlement')
     entitlement = api_params.get("entitlement") or current_entitlement
 
     if entitlement:
         api_params["entitlement"] = entitlement
     elif "entitlement" in api_params:
-        # 如果entitlement为None或空，则移除
         api_params.pop("entitlement", None)
 
     response = requests.get(API_BASE_URL, params=api_params)
@@ -83,16 +79,14 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
 
     response_text = response.text
 
-    # 检查响应是否为JSON（错误响应通常是JSON格式）
+    # Alpha Vantage 的错误与限流响应通常为 JSON，数据响应通常为 CSV。
     try:
         response_json = json.loads(response_text)
-        # 检查限流错误
         if "Information" in response_json:
             info_message = response_json["Information"]
             if "rate limit" in info_message.lower() or "api key" in info_message.lower():
                 raise AlphaVantageRateLimitError(f"Alpha Vantage API 请求频率超限: {info_message}")
     except json.JSONDecodeError:
-        # 响应不是JSON（可能是CSV数据），属于正常情况
         pass
 
     return response_text
@@ -114,23 +108,20 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
         return csv_data
 
     try:
-        # 解析CSV数据
         df = pd.read_csv(StringIO(csv_data))
 
-        # 假设第一列为日期列（时间戳）
+        # Alpha Vantage CSV 的首列为时间戳。
         date_col = df.columns[0]
         df[date_col] = pd.to_datetime(df[date_col])
 
-        # 按日期范围过滤
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
 
         filtered_df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
 
-        # 转换回CSV字符串
         return filtered_df.to_csv(index=False)
 
     except Exception as e:
-        # 过滤失败时返回原始数据并记录警告
+        # 过滤异常不应丢失已获取的数据，因此记录警告并返回原始响应。
         logger.warning("按日期范围过滤 CSV 数据失败: %s", e)
         return csv_data

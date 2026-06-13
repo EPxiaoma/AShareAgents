@@ -1,3 +1,5 @@
+"""创建保守风险观点节点，重点评估本金保护与下行风险。"""
+
 def create_conservative_debator(llm):
     def conservative_node(state) -> dict:
         risk_debate_state = state["risk_debate_state"]

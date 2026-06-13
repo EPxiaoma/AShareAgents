@@ -1,6 +1,7 @@
-# 图构建与配置模块：负责组装和管理A股智能分析工作流图。
-# 提供GraphSetup类，根据选定的分析师类型动态创建节点和边，
-# 串联分析师分析、多空辩论、交易决策和风险评估的全流程。
+"""组装 A 股分析工作流的节点与路由。
+
+工作流按选定分析师动态连接研究、质量门控、辩论、交易和风险评估阶段。
+"""
 
 from typing import Any, Dict
 from langgraph.graph import END, START, StateGraph
