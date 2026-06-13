@@ -20,31 +20,68 @@ RATINGS_5_TIER: Tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
 
-_RATING_SET = {r.lower() for r in RATINGS_5_TIER}
+_RATING_ALIASES = {
+    "buy": "Buy",
+    "买入": "Buy",
+    "overweight": "Overweight",
+    "增持": "Overweight",
+    "超配": "Overweight",
+    "hold": "Hold",
+    "持有": "Hold",
+    "中性": "Hold",
+    "underweight": "Underweight",
+    "减持": "Underweight",
+    "低配": "Underweight",
+    "sell": "Sell",
+    "卖出": "Sell",
+    "清仓": "Sell",
+}
 
-# 匹配 "Rating: X" / "rating - X" / "Rating: **X**" — 兼容 markdown
-# 粗体包装以及冒号或连字符分隔符。
-_RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
+_EXPLICIT_LABEL_RE = re.compile(
+    r"(?:final\s+(?:investment\s+)?(?:rating|decision)|"
+    r"final\s+transaction\s+proposal|rating|"
+    r"最终(?:投资)?(?:评级|决策|建议|计划)|评级|头寸方向|交易信号)",
+    re.IGNORECASE,
+)
+_ENGLISH_RATING_RE = re.compile(
+    r"\b(underweight|overweight|buy|hold|sell)\b",
+    re.IGNORECASE,
+)
+_CHINESE_RATING_RE = re.compile(r"(减持|增持|超配|低配|买入|持有|中性|卖出|清仓)")
+
+
+def _rating_in_text(text: str) -> str | None:
+    """从一段结论文本中提取规范化的五级评级。"""
+    english = _ENGLISH_RATING_RE.search(text)
+    chinese = _CHINESE_RATING_RE.search(text)
+
+    if english and (not chinese or english.start() < chinese.start()):
+        return _RATING_ALIASES[english.group(1).lower()]
+    if chinese:
+        return _RATING_ALIASES[chinese.group(1)]
+    return None
 
 
 def parse_rating(text: str, default: str = "Hold") -> str:
     """从文本中启发式提取五档评级。
 
     两遍扫描策略：
-    1. 查找显式的 "Rating: X" 标签（兼容 markdown 粗体）。
-    2. 回退到文本中任意位置找到的第一个五档评级词。
+    1. 优先查找带有“最终评级 / Rating / 交易信号”等标签的结论行。
+    2. 兼容旧报告，从文末向前查找中英文五档评级词。
 
     返回首字母大写的评级字符串，如果未找到评级词则返回 ``default``。
     """
-    for line in text.splitlines():
-        m = _RATING_LABEL_RE.search(line)
-        if m and m.group(1).lower() in _RATING_SET:
-            return m.group(1).capitalize()
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
 
-    for line in text.splitlines():
-        for word in line.lower().split():
-            clean = word.strip("*:.,")
-            if clean in _RATING_SET:
-                return clean.capitalize()
+    for line in reversed(lines):
+        if _EXPLICIT_LABEL_RE.search(line):
+            rating = _rating_in_text(line)
+            if rating:
+                return rating
+
+    for line in reversed(lines):
+        rating = _rating_in_text(line)
+        if rating:
+            return rating
 
     return default

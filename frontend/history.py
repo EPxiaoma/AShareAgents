@@ -43,19 +43,24 @@ def load_analysis(path: str) -> dict[str, Any]:
 
 
 def extract_signal(state: dict[str, Any]) -> str:
-    """从最终状态字典中提取交易信号（Buy/Sell/Hold）。"""
-    import re
+    """从新旧格式的最终状态中提取五级交易评级。"""
+    from AShareAgents.tools.rating import parse_rating
 
-    for field in (
-        "investment_plan",
-        "trader_investment_decision",
-        "final_trade_decision",
-    ):
-        text = state.get(field, "")
+    candidates: list[Any] = [
+        state.get("final_trade_decision"),
+        (state.get("risk_debate_state") or {}).get("judge_decision")
+        if isinstance(state.get("risk_debate_state"), dict) else None,
+        state.get("trader_investment_decision"),
+        state.get("investment_plan"),
+        (state.get("investment_debate_state") or {}).get("judge_decision")
+        if isinstance(state.get("investment_debate_state"), dict) else None,
+    ]
+
+    for text in candidates:
         if not text:
             continue
-        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-        for keyword in ("BUY", "SELL", "HOLD"):
-            if keyword in cleaned.upper():
-                return keyword.capitalize()
+        cleaned = re.sub(r"<think>.*?</think>", "", str(text), flags=re.DOTALL)
+        rating = parse_rating(cleaned, default="N/A")
+        if rating != "N/A":
+            return rating
     return "N/A"

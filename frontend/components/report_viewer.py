@@ -15,12 +15,18 @@ def _strip_think(text: str) -> str:
 
 
 def _signal_style(signal: str) -> tuple[str, str]:
-    s = signal.upper()
-    if "BUY" in s:
+    s = signal.strip().lower()
+    if s == "buy":
         return "#22c55e", "买入"
-    if "SELL" in s:
+    if s == "overweight":
+        return "#84cc16", "增持"
+    if s == "hold":
+        return "#fbbf24", "持有"
+    if s == "underweight":
+        return "#f97316", "减持"
+    if s == "sell":
         return "#ef4444", "卖出"
-    return "#fbbf24", "持有"
+    return "#a3a3a3", "未知"
 
 
 _ANALYST_SECTIONS = [

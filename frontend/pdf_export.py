@@ -123,12 +123,18 @@ def _strip_md_inline(text: str) -> str:
 
 
 def _signal_color(signal: str) -> tuple[int, int, int]:
-    s = signal.upper()
-    if "BUY" in s:
+    s = signal.strip().lower()
+    if s == "buy":
         return (34, 197, 94)
-    if "SELL" in s:
+    if s == "overweight":
+        return (132, 204, 22)
+    if s == "hold":
+        return (251, 191, 36)
+    if s == "underweight":
+        return (249, 115, 22)
+    if s == "sell":
         return (239, 68, 68)
-    return (251, 191, 36)
+    return (163, 163, 163)
 
 
 _REPORT_SECTIONS = [
