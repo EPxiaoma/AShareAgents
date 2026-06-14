@@ -170,9 +170,13 @@ def render_sidebar() -> None:
         )
     else:
         for entry in history[:20]:
-            t, d = entry["ticker"], entry["date"]
-            label = f"{t}  ·  {d}"
-            if st.button(label, key=f"hist_{t}_{d}", use_container_width=True):
+            t, d, analysis_time = entry["ticker"], entry["date"], entry["time"]
+            label = f"{t}  ·  {d} {analysis_time}"
+            if st.button(
+                label,
+                key=f"hist_{t}_{d}_{analysis_time}",
+                use_container_width=True,
+            ):
                 st.session_state["viewing_history"] = entry["path"]
                 st.session_state["start_analysis"] = None
 

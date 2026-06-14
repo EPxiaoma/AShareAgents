@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ def _results_dir() -> Path:
 def get_history() -> list[dict[str, str]]:
     """扫描已保存的分析日志，返回按日期倒序排列的列表。
 
-    每条记录格式：{"ticker": "300750", "date": "2026-05-12", "path": "/abs/path/...json"}
+    每条记录包含股票代码、交易日期、分析时间和日志文件路径。
     """
     root = _results_dir()
     if not root.exists():
@@ -29,10 +30,18 @@ def get_history() -> list[dict[str, str]]:
         if not match:
             continue
         date = match.group(1)
+        modified_at = datetime.fromtimestamp(log_file.stat().st_mtime)
         ticker = log_file.parent.parent.name
-        entries.append({"ticker": ticker, "date": date, "path": str(log_file)})
+        entries.append(
+            {
+                "ticker": ticker,
+                "date": date,
+                "time": modified_at.strftime("%H:%M:%S"),
+                "path": str(log_file),
+            }
+        )
 
-    entries.sort(key=lambda e: e["date"], reverse=True)
+    entries.sort(key=lambda e: (e["date"], e["time"]), reverse=True)
     return entries
 
 
