@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -15,6 +16,8 @@ from typing import Generator
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from AShareAgents.datasource.utils import safe_ticker_component
+
+logger = logging.getLogger(__name__)
 
 
 def _db_path(data_dir: str | Path, ticker: str) -> Path:
@@ -137,10 +140,24 @@ def clear_checkpoint(data_dir: str | Path, ticker: str, date: str) -> None:
     tid = thread_id(ticker, date)
     conn = sqlite3.connect(str(db))
     try:
-        for table in ("writes", "checkpoints"):
-            conn.execute(f"DELETE FROM {table} WHERE thread_id = ?", (tid,))
+        existing_tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if "writes" in existing_tables:
+            conn.execute("DELETE FROM writes WHERE thread_id = ?", (tid,))
+        if "checkpoints" in existing_tables:
+            conn.execute("DELETE FROM checkpoints WHERE thread_id = ?", (tid,))
         conn.commit()
-    except sqlite3.OperationalError:
-        pass
+    except sqlite3.Error:
+        conn.rollback()
+        logger.warning(
+            "Failed to clear checkpoint %s for %s",
+            tid,
+            ticker,
+            exc_info=True,
+        )
     finally:
         conn.close()

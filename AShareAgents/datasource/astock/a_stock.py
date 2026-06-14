@@ -13,20 +13,19 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Annotated, Any
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import json as _json
 import os
 import logging
 import math
-import re as _re
-import uuid
+import threading
+import time
 
 import pandas as pd
 from ..utils import safe_ticker_component
 from ..baiduFinance import get as _baidu_get
-from ..clsFinance import get as _cls_get
 from ..eastMoney import datacenter as _eastmoney_datacenter
 from ..eastMoney import get as _em_get
 from ..eastMoney import resolve_stock_code as _resolve_eastmoney_stock_code
@@ -35,34 +34,94 @@ from ..mootdx import get_client as _get_mootdx_client
 from ..mootdx import get_daily_bars as _get_mootdx_daily_bars
 from ..sinaFinance import get_daily_kline as _sina_kline_fallback
 from ..sinaFinance import get_financial_report as _fetch_sina_financial_report
-from ..sinaFinance import get as _sina_get
 from ..tencentFinance import get_quotes as _tencent_quote
 from ..tongHuaShun import get_eps_forecast as _ths_eps_forecast
 from ..tongHuaShun import get as _ths_get
+from .errors import RECOVERABLE_DATA_SOURCE_ERRORS, describe_data_source_error
+from .events import (
+    get_dragon_tiger_board as _get_dragon_tiger_board,
+    get_industry_comparison as _get_industry_comparison,
+    get_lockup_expiry as _get_lockup_expiry,
+)
+from .news import (
+    fetch_eastmoney_company_news as _news_fetch_eastmoney,
+    fetch_sina_company_news as _news_fetch_sina,
+    get_company_news as _get_company_news,
+    get_global_news as _aggregate_global_news,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # 运行期缓存：同一次分析中避免同一数据源重复请求
 
-_run_cache: dict[str, Any] = {}
+_RUN_CACHE_TTL_SECONDS = 300.0
+_RUN_CACHE_MAX_ENTRIES = 128
+_run_cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
+_run_cache_lock = threading.RLock()
+_cache_key_locks: dict[str, threading.Lock] = {}
 _warning_keys: set[str] = set()
 
 
 def _cached(key: str, factory, *args) -> Any:
-    """运行期缓存：同一 key 只执行一次 factory，后续直接返回缓存结果。"""
-    if key not in _run_cache:
-        _run_cache[key] = factory(*args)
-    return _run_cache[key]
+    """Return a short-lived cached result for an expensive external request."""
+    now = time.monotonic()
+    with _run_cache_lock:
+        cached = _run_cache.get(key)
+        if cached is not None:
+            created_at, value = cached
+            if now - created_at < _RUN_CACHE_TTL_SECONDS:
+                _run_cache.move_to_end(key)
+                return value
+            del _run_cache[key]
+        key_lock = _cache_key_locks.setdefault(key, threading.Lock())
+
+    # Serialize only identical keys. Unrelated data sources remain parallel.
+    with key_lock:
+        now = time.monotonic()
+        with _run_cache_lock:
+            cached = _run_cache.get(key)
+            if cached is not None:
+                created_at, value = cached
+                if now - created_at < _RUN_CACHE_TTL_SECONDS:
+                    _run_cache.move_to_end(key)
+                    return value
+                del _run_cache[key]
+
+        value = factory(*args)
+        with _run_cache_lock:
+            _run_cache[key] = (time.monotonic(), value)
+            _run_cache.move_to_end(key)
+            while len(_run_cache) > _RUN_CACHE_MAX_ENTRIES:
+                _run_cache.popitem(last=False)
+        return value
+
+
+def _clear_runtime_cache() -> None:
+    """Clear process-local data, primarily for deterministic tests."""
+    with _run_cache_lock:
+        _run_cache.clear()
+        _cache_key_locks.clear()
 
 
 def _warning_once(key: str, message: str, *args) -> None:
     """同类外部数据源故障只告警一次，后续保留在 debug 日志。"""
-    if key in _warning_keys:
-        logger.debug(message, *args)
-        return
-    _warning_keys.add(key)
+    with _run_cache_lock:
+        if key in _warning_keys:
+            logger.debug(message, *args)
+            return
+        _warning_keys.add(key)
     logger.warning(message, *args)
+
+
+def _info_once(key: str, message: str, *args) -> None:
+    """Log a successful fallback once and keep repeats at debug level."""
+    with _run_cache_lock:
+        if key in _warning_keys:
+            logger.debug(message, *args)
+            return
+        _warning_keys.add(key)
+    logger.info(message, *args)
 
 
 # 股票代码格式与市场识别
@@ -111,21 +170,21 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
     if _name_to_code is not None:
         return _name_to_code, _code_to_name
 
-    map_error: Exception | None = None
     try:
         n2c, c2n = _load_mootdx_name_code_map()
-    except Exception as exc:
-        map_error = exc
+    except RECOVERABLE_DATA_SOURCE_ERRORS as exc:
         n2c, c2n = {}, {}
-        logger.debug("mootdx 名称-代码映射构建失败", exc_info=True)
+        logger.debug("mootdx 名称-代码映射构建失败: %s", exc, exc_info=True)
 
     _name_to_code = n2c
     _code_to_name = c2n
     if n2c:
         logger.info("已构建股票名称-代码映射：%d 条记录", len(n2c))
     else:
-        detail = f": {map_error}" if map_error else ""
-        logger.warning("mootdx 名称-代码映射为空，将按需使用 API 回退方案%s", detail)
+        _info_once(
+            "mootdx-name-map",
+            "股票名称解析：mootdx 列表不可用，已启用东方财富按需查询",
+        )
     return _name_to_code, _code_to_name
 
 
@@ -141,7 +200,7 @@ def _resolve_by_api(keyword: str) -> str | None:
     result: str | None = None
     try:
         result = _resolve_eastmoney_stock_code(keyword)
-    except Exception as exc:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as exc:
         logger.warning("东方财富联想搜索 API 对 %r 的请求失败: %s", keyword, exc)
 
     if result is not None:
@@ -195,9 +254,6 @@ def resolve_ticker(user_input: str) -> str:
     raise ValueError(f"找不到股票 '{s}'，请检查名称是否正确")
 
 
-_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-
-
 # OHLCV 数据优先从 mootdx 获取，并以 CSV 缓存。
 
 def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
@@ -232,15 +288,15 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
         df = _get_mootdx_daily_bars(code)
         if df.empty:
             raise ValueError(f"mootdx 未返回 {code} 的 OHLCV 数据")
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         mootdx_error = e
         # 回退：新浪直连 HTTP API
         try:
             df = _sina_kline_fallback(code)
             if df.empty:
                 raise ValueError(f"新浪未返回 {code} 的 OHLCV 数据")
-            logger.info("mootdx OHLCV 获取 %s 失败，已切换到新浪 HTTP 数据源", code)
-        except Exception as fallback_error:
+            logger.info("行情数据源切换：%s 的 mootdx 数据不可用，已使用新浪财经", code)
+        except RECOVERABLE_DATA_SOURCE_ERRORS as fallback_error:
             logger.warning(
                 "OHLCV 获取 %s 失败：mootdx=%s；新浪=%s",
                 code,
@@ -273,7 +329,7 @@ def get_stock_data(
 
     try:
         df = _load_ohlcv_astock(code, end_date)
-    except Exception:
+    except RECOVERABLE_DATA_SOURCE_ERRORS:
         return "K线数据获取失败：mootdx和新浪备用源均不可用，请检查网络连接"
 
     # 按日期范围过滤
@@ -377,7 +433,7 @@ def get_indicators(
         )
         return result
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"计算 {code} 的 {indicator} 指标时出错：{str(e)}"
 
 
@@ -418,7 +474,7 @@ def _get_fundamentals_impl(code: str) -> str:
                         f"跌停价: {q['limit_down']}",
                     ]
                 )
-        except Exception as e:
+        except RECOVERABLE_DATA_SOURCE_ERRORS as e:
             logger.warning("腾讯行情获取 %s 失败: %s", code, e)
 
         # --- mootdx：财务快照（季度） ---
@@ -444,8 +500,17 @@ def _get_fundamentals_impl(code: str) -> str:
                         val = row[field]
                         if val is not None and str(val) != "nan":
                             lines.append(f"{label}: {val}")
-        except Exception as e:
-            logger.warning("mootdx 财务数据获取 %s 失败: %s", code, e)
+        except RECOVERABLE_DATA_SOURCE_ERRORS as e:
+            _info_once(
+                "mootdx-finance",
+                "财务数据源切换：mootdx 快照不可用，已继续使用其他数据源",
+            )
+            logger.debug(
+                "mootdx 财务快照 %s 失败: %s",
+                code,
+                describe_data_source_error(e),
+                exc_info=True,
+            )
 
         # --- 东方财富 push2：股票基本信息（直连 HTTP） ---
         try:
@@ -472,7 +537,7 @@ def _get_fundamentals_impl(code: str) -> str:
                     lines.append(f"流通市值: {d['f117']}")
                 if d.get("f189"):
                     lines.append(f"上市日期: {d['f189']}")
-        except Exception as e:
+        except RECOVERABLE_DATA_SOURCE_ERRORS as e:
             logger.warning("东方财富 push2 股票信息获取 %s 失败: %s", code, e)
 
         # --- 同花顺直连 HTTP：一致预期 EPS 预测 ---
@@ -542,9 +607,9 @@ def _get_fundamentals_impl(code: str) -> str:
                                         f"EPS 下滑 ({cagr * 100:.0f}%), "
                                         f"PEG 不适用"
                                     )
-                except Exception as e:
+                except RECOVERABLE_DATA_SOURCE_ERRORS as e:
                     logger.warning("远期 PE 计算 %s 失败: %s", code, e)
-        except Exception as e:
+        except RECOVERABLE_DATA_SOURCE_ERRORS as e:
             logger.warning("一致预期 EPS 预测获取 %s 失败: %s", code, e)
 
         if not lines:
@@ -557,7 +622,7 @@ def _get_fundamentals_impl(code: str) -> str:
 
         return header + "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 基本面数据时出错：{str(e)}"
 
 
@@ -604,7 +669,7 @@ def get_balance_sheet(
 
         return header + csv_string
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 资产负债表数据时出错：{str(e)}"
 
 
@@ -635,7 +700,7 @@ def get_cashflow(
 
         return header + csv_string
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 现金流量表数据时出错：{str(e)}"
 
 
@@ -666,7 +731,7 @@ def get_income_statement(
 
         return header + csv_string
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 利润表数据时出错：{str(e)}"
 
 
@@ -674,92 +739,17 @@ def get_income_statement(
 
 
 def _fetch_news_eastmoney(code: str, page_size: int = 20) -> list[dict]:
-    """通过东方财富搜索API直接获取个股新闻。"""
-    url = "https://search-api-web.eastmoney.com/search/jsonp"
-    inner_param = {
-        "uid": "",
-        "keyword": code,
-        "type": ["cmsArticleWebOld"],
-        "client": "web",
-        "clientType": "web",
-        "clientVersion": "curr",
-        "param": {
-            "cmsArticleWebOld": {
-                "searchScope": "default",
-                "sort": "default",
-                "pageIndex": 1,
-                "pageSize": page_size,
-                "preTag": "",
-                "postTag": "",
-            }
-        },
-    }
-    params = {
-        "cb": "callback",
-        "param": _json.dumps(inner_param, ensure_ascii=False),
-        "_": "1",
-    }
-    headers = {
-        "Referer": "https://so.eastmoney.com/",
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
-        ),
-    }
+    """Compatibility wrapper for the extracted Eastmoney news adapter."""
+    return _news_fetch_eastmoney(code, page_size)
 
-    resp = _em_get(url, params=params, headers=headers, timeout=15)
-    resp.raise_for_status()
-    text = resp.text
-    text = text[text.index("(") + 1 : text.rindex(")")]
-    data = _json.loads(text)
 
-    articles: list[dict] = []
-    for item in data.get("result", {}).get("cmsArticleWebOld", []):
-        articles.append({
-            "title": item.get("title", ""),
-            "content": item.get("content", ""),
-            "time": item.get("date", ""),
-            "source": item.get("mediaName", "东方财富"),
-            "url": item.get("url", ""),
-        })
-    return articles
 
 
 def _fetch_news_sina(code: str, page_size: int = 20) -> list[dict]:
-    """新浪财经个股新闻 API（备用数据源）。"""
-    prefix = "sh" if code.startswith(("6", "9")) else "sz"
-    url = (
-        f"https://vip.stock.finance.sina.com.cn/corp/view/"
-        f"vCB_AllNewsStock.php?symbol={prefix}{code}&Page=1"
-    )
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
-        ),
-        "Referer": "https://finance.sina.com.cn/",
-    }
+    """Compatibility wrapper for the extracted Sina news adapter."""
+    return _news_fetch_sina(code, page_size)
 
-    resp = _sina_get(url, headers=headers, timeout=15)
-    resp.raise_for_status()
-    resp.encoding = "gb2312"
-    html = resp.text
 
-    articles: list[dict] = []
-    rows = _re.findall(
-        r"(\d{4}-\d{2}-\d{2})\s*(?:&nbsp;)*(\d{2}:\d{2})\s*(?:&nbsp;)*"
-        r"<a[^>]+href='([^']+)'[^>]*>([^<]+)</a>",
-        html,
-    )
-    for date_str, time_str, link, title in rows[:page_size]:
-        articles.append({
-            "title": title.strip(),
-            "content": "",
-            "time": f"{date_str} {time_str}",
-            "source": "新浪财经",
-            "url": link,
-        })
-    return articles
 
 
 def get_news(
@@ -767,65 +757,10 @@ def get_news(
     start_date: Annotated[str, "起始日期，格式 yyyy-mm-dd"],
     end_date: Annotated[str, "结束日期，格式 yyyy-mm-dd"],
 ) -> str:
-    """通过东方财富直连 API 获取个股新闻（新浪作为备用）。"""
-    code = _normalize_ticker(ticker)
+    """获取个股新闻，东方财富失败时回退到新浪财经。"""
+    return _get_company_news(_normalize_ticker(ticker), start_date, end_date)
 
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    articles: list[dict] = []
-    source_label = ""
-
-    try:
-        articles = _fetch_news_eastmoney(code)
-        source_label = "东方财富"
-    except Exception as e:
-        logger.warning("东方财富新闻获取 %s 失败: %s", code, e)
-
-    if not articles:
-        try:
-            articles = _fetch_news_sina(code)
-            source_label = "新浪财经"
-        except Exception as e:
-            logger.warning("新浪财经新闻获取 %s 失败: %s", code, e)
-
-    if not articles:
-        return f"未找到 A 股 '{code}' 的新闻"
-
-    news_str = ""
-    count = 0
-    for art in articles:
-        pub_time = art.get("time", "")
-        try:
-            pub_dt = datetime.strptime(pub_time[:10], "%Y-%m-%d")
-            if pub_dt < start_dt or pub_dt > end_dt:
-                continue
-        except (ValueError, IndexError):
-            pass
-
-        title = art["title"]
-        content = art.get("content", "")
-        source = art.get("source", source_label)
-        link = art.get("url", "")
-
-        news_str += f"### {title} (来源: {source})\n"
-        if content:
-            snippet = content[:300] + "..." if len(content) > 300 else content
-            news_str += f"{snippet}\n"
-        if link and link != "nan":
-            news_str += f"链接: {link}\n"
-        news_str += "\n"
-        count += 1
-
-    if count == 0:
-        return (
-            f"在 {start_date} 至 {end_date} 期间未找到 A 股 '{code}' 的新闻"
-        )
-
-    return (
-        f"## {code} (A股) 新闻，{start_date} 至 {end_date}:\n\n"
-        + news_str
-    )
 
 
 # ---- 8. get_global_news ----
@@ -836,103 +771,26 @@ def get_global_news(
     look_back_days: Annotated[int, "回顾天数"] = 7,
     limit: Annotated[int, "最多文章数"] = 10,
 ) -> str:
-    """通过直连 HTTP 获取中国/全球财经新闻（财联社 + 东方财富）。"""
-    return _cached(f"global_news:{curr_date}:{look_back_days}", _get_global_news_impl, curr_date, look_back_days, limit)
+    """获取中国及全球财经新闻。"""
+    return _cached(
+        f"global_news:{curr_date}:{look_back_days}:{limit}",
+        _get_global_news_impl,
+        curr_date,
+        look_back_days,
+        limit,
+    )
 
 
 def _get_global_news_impl(curr_date: str, look_back_days: int, limit: int) -> str:
-    """get_global_news 的实际实现（不含缓存层）。"""
-    start_dt = datetime.strptime(curr_date, "%Y-%m-%d") - relativedelta(
-        days=look_back_days
+    """Execute the extracted global-news aggregation without caching."""
+    return _aggregate_global_news(
+        curr_date,
+        look_back_days,
+        limit,
+        warning_once=_warning_once,
     )
-    start_date = start_dt.strftime("%Y-%m-%d")
 
-    all_news: list[dict] = []
 
-    # 数据源1：财联社快讯——直连 HTTP
-    try:
-        cls_url = "https://www.cls.cn/nodeapi/telegraphList"
-        cls_params = {"rn": str(limit), "page": "1"}
-        cls_headers = {"User-Agent": _UA, "Referer": "https://www.cls.cn/"}
-        r_cls = _cls_get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
-        r_cls.raise_for_status()
-        if not r_cls.content.strip():
-            raise ValueError("服务器返回空响应")
-        d_cls = r_cls.json()
-        for item in d_cls.get("data", {}).get("roll_data", []):
-            title = item.get("title", "") or item.get("brief", "")
-            content = item.get("content", "") or item.get("brief", "")
-            ctime = item.get("ctime", "")
-            # ctime 是 Unix 时间戳
-            pub_time = ""
-            if ctime:
-                try:
-                    pub_time = datetime.fromtimestamp(int(ctime)).strftime("%Y-%m-%d %H:%M")
-                except (ValueError, TypeError, OSError):
-                    pub_time = str(ctime)
-            all_news.append({
-                "title": title,
-                "content": content,
-                "time": pub_time,
-                "source": "CLS Wire",
-            })
-    except Exception as e:
-        _warning_once("cls-news", "财联社新闻获取失败: %s", e)
-
-    # 数据源2：东财7x24资讯——直连 HTTP
-    try:
-        em_url = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
-        em_params = {
-            "client": "web",
-            "biz": "web_724",
-            "fastColumn": "102",
-            "sortEnd": "",
-            "pageSize": str(limit),
-            "req_trace": str(uuid.uuid4()),
-        }
-        em_headers = {"User-Agent": _UA, "Referer": "https://kuaixun.eastmoney.com/"}
-        r_em = _em_get(em_url, params=em_params, headers=em_headers, timeout=10)
-        d_em = r_em.json()
-        for item in d_em.get("data", {}).get("fastNewsList", []):
-            title = item.get("title", "")
-            summary = item.get("summary", "")[:200]
-            pub_time = item.get("showTime", "")
-            all_news.append({
-                "title": title,
-                "content": summary,
-                "time": pub_time,
-                "source": "Eastmoney Global",
-            })
-    except Exception as e:
-        logger.warning("东方财富全球新闻获取失败: %s", e)
-
-    if not all_news:
-        return f"未找到 {curr_date} 的全球财经新闻"
-
-    # 按标题去重
-    seen: set[str] = set()
-    unique: list[dict] = []
-    for n in all_news:
-        if n["title"] not in seen:
-            seen.add(n["title"])
-            unique.append(n)
-
-    news_str = ""
-    for n in unique[:limit]:
-        news_str += f"### {n['title']} (来源: {n['source']})\n"
-        if n.get("content"):
-            snippet = (
-                n["content"][:300] + "..."
-                if len(n["content"]) > 300
-                else n["content"]
-            )
-            news_str += f"{snippet}\n"
-        news_str += "\n"
-
-    return (
-        f"## 中国及全球财经新闻，{start_date} 至 {curr_date}:\n\n"
-        + news_str
-    )
 
 
 # ---- 9. get_insider_transactions ----
@@ -980,7 +838,7 @@ def get_insider_transactions(
 
         return header + text
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 股东/内部人数据时出错：{str(e)}"
 
 
@@ -1068,12 +926,12 @@ def get_profit_forecast(
                                 f"EPS 下滑 ({cagr * 100:.0f}%), "
                                 f"PEG 不适用"
                             )
-        except Exception as e:
+        except RECOVERABLE_DATA_SOURCE_ERRORS as e:
             logger.warning("远期 PE 计算 %s 失败: %s", code, e)
 
         return "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 盈利预测数据时出错：{str(e)}"
 
 
@@ -1153,7 +1011,7 @@ def get_hot_stocks(
 
         return "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {curr_date} 热门股票数据时出错：{str(e)}"
 
 
@@ -1309,7 +1167,7 @@ def get_northbound_flow(
 
         return "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取北向资金流向数据时出错：{str(e)}"
 
 
@@ -1391,7 +1249,7 @@ def get_concept_blocks(
 
         return "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 概念板块数据时出错：{str(e)}"
 
 
@@ -1506,7 +1364,7 @@ def get_fund_flow(
 
         return "\n".join(lines)
 
-    except Exception as e:
+    except RECOVERABLE_DATA_SOURCE_ERRORS as e:
         return f"获取 {code} 资金流向数据时出错：{str(e)}"
 
 
@@ -1519,269 +1377,51 @@ def get_dragon_tiger_board(
     trade_date: str,
     look_back_days: int = 30,
 ) -> str:
-    """获取龙虎榜上榜记录及席位明细。
-
-    Args:
-        ticker: 6位A股代码，如 '000858'
-        trade_date: YYYY-MM-DD 格式日期
-        look_back_days: 向前搜索多少天（默认 30）
-
-    Returns:
-        格式化文本，包含龙虎榜上榜记录、买卖席位TOP5及机构动向。
-    """
-    code = safe_ticker_component(ticker)
-    end_dt = datetime.strptime(trade_date, "%Y-%m-%d")
-    start_dt = end_dt - pd.Timedelta(days=look_back_days)
-    start_date_str = start_dt.strftime("%Y-%m-%d")
-    lines = [f"# 龙虎榜数据 | {code} | {trade_date} (近{look_back_days}日)"]
-
-    # 1. 上榜记录——东财数据中心直连 HTTP
-    try:
-        data = _eastmoney_datacenter(
-            "RPT_DAILYBILLBOARD_DETAILSNEW",
-            filter_str=(
-                f"(TRADE_DATE>='{start_date_str}')"
-                f"(TRADE_DATE<='{trade_date}')"
-                f"(SECURITY_CODE=\"{code}\")"
-            ),
-            page_size=50,
-            sort_columns="TRADE_DATE",
-            sort_types="-1",
-        )
-        if not data:
-            lines.append(f"\n近{look_back_days}日未上龙虎榜。")
-        else:
-            lines.append(f"\n## 上榜记录 ({len(data)} 次)")
-            lines.append("日期 | 原因 | 净买入(万) | 换手率")
-            for row in data:
-                net_buy = round((row.get("BILLBOARD_NET_AMT") or 0) / 10000, 1)
-                turnover = round(float(row.get("TURNOVERRATE") or 0), 2)
-                lines.append(
-                    f"  {str(row.get('TRADE_DATE', ''))[:10]} "
-                    f"| {row.get('EXPLANATION', '')} "
-                    f"| {net_buy:.0f} "
-                    f"| {turnover:.2f}%"
-                )
-    except Exception as e:
-        lines.append(f"龙虎榜列表查询失败: {e}")
-
-    # 2. 最近上榜的买卖席位——东财数据中心直连 HTTP
-    try:
-        if data:
-            latest_date = str(data[0].get("TRADE_DATE", ""))[:10]
-            lines.append(f"\n## 最近上榜席位明细 ({latest_date})")
-
-            # 买入席位
-            buy_data = _eastmoney_datacenter(
-                "RPT_BILLBOARD_DAILYDETAILSBUY",
-                filter_str=f"(TRADE_DATE='{latest_date}')(SECURITY_CODE=\"{code}\")",
-                page_size=10,
-                sort_columns="BUY",
-                sort_types="-1",
-            )
-            if buy_data:
-                lines.append("\n### 买入席位 TOP5")
-                lines.append("营业部 | 买入(万) | 卖出(万) | 净额(万)")
-                for row in buy_data[:5]:
-                    buy_amt = round((row.get("BUY") or 0) / 10000, 1)
-                    sell_amt = round((row.get("SELL") or 0) / 10000, 1)
-                    net = round((row.get("NET") or 0) / 10000, 1)
-                    lines.append(
-                        f"  {row.get('OPERATEDEPT_NAME', '')} "
-                        f"| {buy_amt:.0f} | {sell_amt:.0f} | {net:.0f}"
-                    )
-
-            # 卖出席位
-            sell_data = _eastmoney_datacenter(
-                "RPT_BILLBOARD_DAILYDETAILSSELL",
-                filter_str=f"(TRADE_DATE='{latest_date}')(SECURITY_CODE=\"{code}\")",
-                page_size=10,
-                sort_columns="SELL",
-                sort_types="-1",
-            )
-            if sell_data:
-                lines.append("\n### 卖出席位 TOP5")
-                lines.append("营业部 | 买入(万) | 卖出(万) | 净额(万)")
-                for row in sell_data[:5]:
-                    buy_amt = round((row.get("BUY") or 0) / 10000, 1)
-                    sell_amt = round((row.get("SELL") or 0) / 10000, 1)
-                    net = round((row.get("NET") or 0) / 10000, 1)
-                    lines.append(
-                        f"  {row.get('OPERATEDEPT_NAME', '')} "
-                        f"| {buy_amt:.0f} | {sell_amt:.0f} | {net:.0f}"
-                    )
-    except Exception:
-        pass
-
-    # 3. 机构动向 — 从买卖席位明细筛选机构专用席位 (OPERATEDEPT_CODE="0")
-    try:
-        inst_buy = 0.0
-        inst_sell = 0.0
-        for detail, side in [(buy_data, "buy"), (sell_data, "sell")]:
-            for row in (detail or []):
-                if str(row.get("OPERATEDEPT_CODE", "")) == "0":
-                    if side == "buy":
-                        inst_buy += (row.get("BUY") or 0)
-                    else:
-                        inst_sell += (row.get("SELL") or 0)
-        if inst_buy > 0 or inst_sell > 0:
-            lines.append("\n## 机构动向")
-            lines.append(
-                f"  机构买入 {inst_buy/1e4:.0f} 万 "
-                f"| 卖出 {inst_sell/1e4:.0f} 万 "
-                f"| 净额 {(inst_buy - inst_sell)/1e4:.0f} 万"
-            )
-    except Exception:
-        pass
-
-    return "\n".join(lines)
+    """获取龙虎榜记录、席位明细和机构动向。"""
+    return _cached(
+        f"dragon-tiger:{ticker}:{trade_date}:{look_back_days}",
+        _get_dragon_tiger_board,
+        ticker,
+        trade_date,
+        look_back_days,
+    )
 
 
 # ---------------------------------------------------------------------------
 # 16. 限售解禁日历
 # ---------------------------------------------------------------------------
 
+
 def get_lockup_expiry(
     ticker: str,
     trade_date: str,
     forward_days: int = 90,
 ) -> str:
-    """获取个股限售解禁时间表。
-
-    Args:
-        ticker: 6位A股代码
-        trade_date: YYYY-MM-DD 格式日期
-        forward_days: 向前查看多少天（默认 90）
-
-    Returns:
-        格式化文本，包含历史解禁记录和即将到期的解禁日历及影响指标。
-    """
-    code = safe_ticker_component(ticker)
-    lines = [f"# 限售解禁日历 | {code} | {trade_date}"]
-
-    # 1. 历史解禁记录——东财数据中心直连 HTTP
-    try:
-        history_data = _eastmoney_datacenter(
-            "RPT_LIFT_STAGE",
-            filter_str=f"(SECURITY_CODE=\"{code}\")",
-            page_size=15,
-            sort_columns="FREE_DATE",
-            sort_types="-1",
-        )
-        if history_data:
-            lines.append(f"\n## 个股解禁记录 (共 {len(history_data)} 批)")
-            lines.append("解禁时间 | 类型 | 解禁数量 | 占比")
-            for row in history_data:
-                lines.append(
-                    f"  {str(row.get('FREE_DATE', ''))[:10]} "
-                    f"| {row.get('LIMITED_STOCK_TYPE', '')} "
-                    f"| {row.get('FREE_SHARES_NUM', '')} "
-                    f"| {row.get('FREE_RATIO', '')}"
-                )
-        else:
-            lines.append("\n无历史解禁记录。")
-    except Exception as e:
-        lines.append(f"个股解禁查询失败: {e}")
-
-    # 2. 未来待解禁——东财数据中心直连 HTTP
-    try:
-        end_dt = datetime.strptime(trade_date, "%Y-%m-%d") + pd.Timedelta(
-            days=forward_days
-        )
-        end_str = end_dt.strftime("%Y-%m-%d")
-        upcoming_data = _eastmoney_datacenter(
-            "RPT_LIFT_STAGE",
-            filter_str=(
-                f"(SECURITY_CODE=\"{code}\")"
-                f"(FREE_DATE>='{trade_date}')"
-                f"(FREE_DATE<='{end_str}')"
-            ),
-            page_size=20,
-            sort_columns="FREE_DATE",
-            sort_types="1",
-        )
-        if upcoming_data:
-            lines.append(f"\n## 未来 {forward_days} 天待解禁")
-            for row in upcoming_data:
-                lines.append(
-                    f"  {str(row.get('FREE_DATE', ''))[:10]} "
-                    f"| {row.get('LIMITED_STOCK_TYPE', '')} "
-                    f"| 数量 {row.get('FREE_SHARES_NUM', '')} "
-                    f"| 占比 {row.get('FREE_RATIO', '')}"
-                )
-        else:
-            lines.append(f"\n未来 {forward_days} 天无待解禁。")
-    except Exception as e:
-        lines.append(f"解禁日历查询失败: {e}")
-
-    return "\n".join(lines)
+    """获取历史及未来限售解禁安排。"""
+    return _cached(
+        f"lockup:{ticker}:{trade_date}:{forward_days}",
+        _get_lockup_expiry,
+        ticker,
+        trade_date,
+        forward_days,
+    )
 
 
 # ---------------------------------------------------------------------------
 # 17. 行业横向对比
 # ---------------------------------------------------------------------------
 
+
 def get_industry_comparison(
     ticker: str,
     trade_date: str,
     top_n: int = 20,
 ) -> str:
-    """获取行业板块表现对比。
-
-    Args:
-        ticker: 6位A股代码（用于识别相关行业）
-        trade_date: YYYY-MM-DD 格式日期
-        top_n: 显示涨幅最高/最低行业数量（默认 20）
-
-    Returns:
-        格式化文本，包含行业板块涨跌排名，高亮目标股票所属行业。
-    """
-    code = safe_ticker_component(ticker)
-    lines = [f"# 行业横向对比 | {code} | {trade_date}"]
-
-    # 东财 push2 行业板块排名（直连 HTTP，替代返回401的同花顺接口）
-    try:
-        url = "https://push2.eastmoney.com/api/qt/clist/get"
-        params = {
-            "pn": "1",
-            "pz": "100",
-            "po": "1",
-            "np": "1",
-            "fltt": "2",
-            "invt": "2",
-            "fs": "m:90+t:2",
-            "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207",
-        }
-        r = _em_get(url, params=params, timeout=15)
-        d = r.json()
-        items = d.get("data", {}).get("diff", [])
-
-        if items:
-            lines.append(
-                f"\n## 全行业表现 (东财 {len(items)} 个行业)"
-            )
-            lines.append(
-                "排名 | 行业 | 涨跌幅 | 上涨 | 下跌 | 领涨股"
-            )
-            for i, item in enumerate(items):
-                name = item.get("f14", "")
-                change_pct = item.get("f3", 0)
-                up_count = item.get("f104", 0)
-                down_count = item.get("f105", 0)
-                leader = item.get("f140", "")
-                lines.append(
-                    f"  {i+1}. {name} "
-                    f"| {change_pct}% "
-                    f"| {up_count} "
-                    f"| {down_count} "
-                    f"| {leader}"
-                )
-                if i >= top_n * 2 - 1:
-                    lines.append(f"  ... (显示前/后 {top_n} 名)")
-                    break
-        else:
-            lines.append("行业数据获取为空。")
-    except Exception as e:
-        lines.append(f"行业对比查询失败: {e}")
-
-    return "\n".join(lines)
+    """获取东方财富行业表现排名。"""
+    return _cached(
+        f"industry:{ticker}:{trade_date}:{top_n}",
+        _get_industry_comparison,
+        ticker,
+        trade_date,
+        top_n,
+    )

@@ -27,6 +27,7 @@ def get_eps_forecast(code: str) -> pd.DataFrame:
         },
         timeout=15,
     )
+    response.raise_for_status()
     response.encoding = "gbk"
     with contextlib.redirect_stderr(io.StringIO()), warnings.catch_warnings():
         warnings.simplefilter("ignore")

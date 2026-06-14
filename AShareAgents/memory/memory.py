@@ -188,24 +188,23 @@ class TradingMemoryLog:
             tag_line = lines[0].strip()
 
             matched = False
-            for (trade_date, ticker), upd in list(update_map.items()):
-                pending_prefix = f"[{trade_date} | {ticker} |"
-                if tag_line.startswith(pending_prefix) and tag_line.endswith("| pending]"):
-                    fields = [f.strip() for f in tag_line[1:-1].split("|")]
+            if tag_line.endswith("| pending]"):
+                fields = [f.strip() for f in tag_line[1:-1].split("|")]
+                key = (fields[0], fields[1]) if len(fields) >= 4 else None
+                upd = update_map.pop(key, None) if key is not None else None
+                if upd is not None:
                     rating = fields[2]
                     raw_pct = f"{upd['raw_return']:+.1%}"
                     alpha_pct = f"{upd['alpha_return']:+.1%}"
                     new_tag = (
-                        f"[{trade_date} | {ticker} | {rating}"
+                        f"[{fields[0]} | {fields[1]} | {rating}"
                         f" | {raw_pct} | {alpha_pct} | {upd['holding_days']}d]"
                     )
                     rest = "\n".join(lines[1:])
                     new_blocks.append(
                         f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{upd['reflection']}"
                     )
-                    del update_map[(trade_date, ticker)]
                     matched = True
-                    break
 
             if not matched:
                 new_blocks.append(block)

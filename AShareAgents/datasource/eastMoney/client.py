@@ -24,15 +24,13 @@ def get(url, params=None, headers=None, timeout=15, **kwargs):
     """GET an Eastmoney endpoint using the shared throttled session."""
     global _last_call
     with _lock:
-        wait = _minimum_interval - (time.time() - _last_call)
+        wait = _minimum_interval - (time.monotonic() - _last_call)
         if wait > 0:
             time.sleep(wait + random.uniform(0.1, 0.5))
-        try:
-            return _session.get(
-                url, params=params, headers=headers, timeout=timeout, **kwargs
-            )
-        finally:
-            _last_call = time.time()
+        _last_call = time.monotonic()
+    return _session.get(
+        url, params=params, headers=headers, timeout=timeout, **kwargs
+    )
 
 
 def datacenter(
@@ -58,6 +56,7 @@ def datacenter(
             "client": "WEB",
         },
     )
+    response.raise_for_status()
     result = response.json().get("result") or {}
     return result.get("data") or []
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
 
@@ -50,6 +51,9 @@ def render_report(
     """渲染完整的分析报告。"""
 
     color, cn_signal = _signal_style(signal)
+    safe_signal = html.escape(signal.upper())
+    safe_ticker = html.escape(str(ticker))
+    safe_trade_date = html.escape(str(trade_date))
 
     stats_html = ""
     if elapsed is not None:
@@ -68,10 +72,10 @@ def render_report(
         ">
             <div style="font-size:0.9rem; color:#888; letter-spacing:2px;">交易信号</div>
             <div style="font-size:3.5rem; font-weight:900; color:{color}; margin:0.3rem 0;">
-                {signal.upper()}
+                {safe_signal}
             </div>
             <div style="font-size:1.2rem; color:#f5f1eb;">
-                {ticker} · {trade_date}
+                {safe_ticker} · {safe_trade_date}
             </div>
             {stats_html}
         </div>

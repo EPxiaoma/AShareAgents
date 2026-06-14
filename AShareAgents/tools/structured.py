@@ -39,6 +39,11 @@ def _model_key(llm: Any) -> tuple[str, str]:
     return base_url, model
 
 
+def _model_label(llm: Any) -> str:
+    """Return a compact model label suitable for console messages."""
+    return str(getattr(llm, "model_name", None) or getattr(llm, "model", "未知模型"))
+
+
 def _is_thinking_tool_choice_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return "tool_choice" in message and (
@@ -87,10 +92,10 @@ def invoke_structured_or_freetext(
         except Exception as exc:
             if _is_thinking_tool_choice_error(exc):
                 _STRUCTURED_DISABLED_MODELS.add(model_key)
-                logger.warning(
-                    "%s: 当前模型的 thinking 模式不支持结构化 tool_choice；"
-                    "本次运行后续 Agent 将直接使用自由文本模式",
-                    agent_name,
+                logger.info(
+                    "结构化输出已自动降级：模型 %s 的 thinking 模式不支持 "
+                    "tool_choice；后续同模型直接使用自由文本",
+                    _model_label(plain_llm),
                 )
             else:
                 logger.warning(

@@ -85,6 +85,7 @@ def get_financial_report(
         headers={"User-Agent": USER_AGENT},
         timeout=15,
     )
+    response.raise_for_status()
     items = response.json().get("result", {}).get("data", {}).get(source_type, [])
     if not items:
         return pd.DataFrame()

@@ -8,6 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+_HISTORY_NAME_RE = re.compile(r"full_states_log_\d{4}-\d{2}-\d{2}\.json$")
+_MAX_HISTORY_BYTES = 20 * 1024 * 1024
+
 
 def _results_dir() -> Path:
     """获取配置中的分析结果目录。"""
@@ -29,15 +32,19 @@ def get_history() -> list[dict[str, str]]:
         match = re.search(r"full_states_log_(\d{4}-\d{2}-\d{2})\.json$", log_file.name)
         if not match:
             continue
+        try:
+            safe_path = _resolve_history_path(log_file)
+            modified_at = datetime.fromtimestamp(safe_path.stat().st_mtime)
+        except (OSError, ValueError):
+            continue
         date = match.group(1)
-        modified_at = datetime.fromtimestamp(log_file.stat().st_mtime)
         ticker = log_file.parent.parent.name
         entries.append(
             {
                 "ticker": ticker,
                 "date": date,
                 "time": modified_at.strftime("%H:%M:%S"),
-                "path": str(log_file),
+                "path": str(safe_path),
             }
         )
 
@@ -45,10 +52,27 @@ def get_history() -> list[dict[str, str]]:
     return entries
 
 
+def _resolve_history_path(path: str | Path) -> Path:
+    """Resolve and validate a history file beneath the configured results root."""
+    root = _results_dir().resolve()
+    candidate = Path(path).resolve(strict=True)
+    if not candidate.is_file() or not candidate.is_relative_to(root):
+        raise ValueError("History file is outside the configured results directory")
+    if not _HISTORY_NAME_RE.fullmatch(candidate.name):
+        raise ValueError("Invalid history filename")
+    if candidate.stat().st_size > _MAX_HISTORY_BYTES:
+        raise ValueError("History file is too large")
+    return candidate
+
+
 def load_analysis(path: str) -> dict[str, Any]:
-    """加载已保存的分析 JSON 文件。"""
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    """Load a validated saved analysis JSON object."""
+    safe_path = _resolve_history_path(path)
+    with safe_path.open(encoding="utf-8") as f:
+        state = json.load(f)
+    if not isinstance(state, dict):
+        raise ValueError("History JSON must contain an object")
+    return state
 
 
 def extract_signal(state: dict[str, Any]) -> str:
