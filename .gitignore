@@ -221,3 +221,4 @@ cache/
 /.claude/
 /scripts/
 /.idea/
+/.codex-dev-pids

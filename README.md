@@ -67,7 +67,17 @@ AShareAgents/
 │   ├── agents/                   # 分析师、研究员、交易员与风控 Agent
 │   ├── api/                      # API 模块
 │   ├── context/                  # 上下文工程
-│   ├── datasource/               # 数据源
+│   ├── datasource/               # 数据源路由与供应商适配器
+│   │   ├── astock/               # A股数据聚合、回退与格式化
+│   │   ├── alphaVantage/         # Alpha Vantage
+│   │   ├── yFinance/             # Yahoo Finance
+│   │   ├── eastMoney/            # 东方财富
+│   │   ├── mootdx/               # 通达信行情
+│   │   ├── sinaFinance/          # 新浪财经
+│   │   ├── tencentFinance/       # 腾讯财经
+│   │   ├── tongHuaShun/          # 同花顺
+│   │   ├── clsFinance/           # 财联社
+│   │   └── baiduFinance/         # 百度股市通
 │   ├── llm/                      # LLM 客户端、工厂与模型目录
 │   ├── memory/                   # 记忆系统
 │   ├── models/                   # 结构化输出数据模型

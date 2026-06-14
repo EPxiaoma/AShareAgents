@@ -1,6 +1,6 @@
-"""AShareAgents A股（中国大陆）数据供应商。
+"""AShareAgents A股（中国大陆）数据编排层。
 
-零第三方数据依赖（无 akshare），所有数据源均为直接 HTTP API 或 mootdx TCP 连接。
+聚合同级供应商适配器的数据，并提供缓存、回退和统一文本输出。
 
 数据来源：
 - mootdx (TCP 7709)：OHLCV K线、财务快照、F10文本
@@ -20,16 +20,25 @@ import json as _json
 import os
 import logging
 import math
-import random
 import re as _re
-import time
 import uuid
-import urllib.request
 
 import pandas as pd
-import requests as _requests
-
 from ..utils import safe_ticker_component
+from ..baiduFinance import get as _baidu_get
+from ..clsFinance import get as _cls_get
+from ..eastMoney import datacenter as _eastmoney_datacenter
+from ..eastMoney import get as _em_get
+from ..eastMoney import resolve_stock_code as _resolve_eastmoney_stock_code
+from ..mootdx import build_name_code_map as _load_mootdx_name_code_map
+from ..mootdx import get_client as _get_mootdx_client
+from ..mootdx import get_daily_bars as _get_mootdx_daily_bars
+from ..sinaFinance import get_daily_kline as _sina_kline_fallback
+from ..sinaFinance import get_financial_report as _fetch_sina_financial_report
+from ..sinaFinance import get as _sina_get
+from ..tencentFinance import get_quotes as _tencent_quote
+from ..tongHuaShun import get_eps_forecast as _ths_eps_forecast
+from ..tongHuaShun import get as _ths_get
 
 logger = logging.getLogger(__name__)
 
@@ -102,32 +111,12 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
     if _name_to_code is not None:
         return _name_to_code, _code_to_name
 
-    n2c: dict[str, str] = {}
-    c2n: dict[str, str] = {}
-
     map_error: Exception | None = None
     try:
-        from mootdx.quotes import Quotes
-
-        client = Quotes.factory(market="std")
-        for market in (0, 1):  # 0=SZ, 1=SH
-            try:
-                stocks = client.stocks(market=market)
-                if stocks is None or stocks.empty:
-                    continue
-                for _, row in stocks.iterrows():
-                    code = str(row["code"]).strip()
-                    name = str(row["name"]).strip()
-                    if not _re.match(r"^[036]\d{5}$", code):
-                        continue
-                    clean_name = name.replace(" ", "").replace("　", "")
-                    n2c[clean_name] = code
-                    c2n[code] = clean_name
-            except Exception as exc:
-                map_error = exc
-                logger.debug("mootdx stocks(market=%d) 获取失败", market, exc_info=True)
+        n2c, c2n = _load_mootdx_name_code_map()
     except Exception as exc:
         map_error = exc
+        n2c, c2n = {}, {}
         logger.debug("mootdx 名称-代码映射构建失败", exc_info=True)
 
     _name_to_code = n2c
@@ -151,27 +140,7 @@ def _resolve_by_api(keyword: str) -> str | None:
 
     result: str | None = None
     try:
-        url = "https://searchapi.eastmoney.com/api/suggest/get"
-        params = {
-            "input": keyword,
-            "type": "14",
-            "token": "D43BF722C8E33BDC906FB84D85E326E8",
-            "count": "5",
-        }
-        r = _requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        stocks = (
-            data.get("QuotationCodeTable", {}).get("Data", [])
-            or []
-        )
-        for item in stocks:
-            code = str(item.get("Code", "")).strip()
-            market = str(item.get("MktNum", "")).strip()
-            # market: "1"=沪市, "0"=深市, 仅保留6位A股代码
-            if _re.match(r"^[036]\d{5}$", code) and market in ("0", "1"):
-                result = code
-                break
+        result = _resolve_eastmoney_stock_code(keyword)
     except Exception as exc:
         logger.warning("东方财富联想搜索 API 对 %r 的请求失败: %s", keyword, exc)
 
@@ -226,202 +195,7 @@ def resolve_ticker(user_input: str) -> str:
     raise ValueError(f"找不到股票 '{s}'，请检查名称是否正确")
 
 
-# mootdx 客户端在进程内复用，避免重复建立连接。
-
-_mootdx_client = None
-
-
-def _get_mootdx_client():
-    """惰性初始化 mootdx Quotes 客户端（TCP 连接，可复用）。"""
-    global _mootdx_client
-    if _mootdx_client is None:
-        from mootdx.quotes import Quotes
-
-        _mootdx_client = Quotes.factory(market="std")
-    return _mootdx_client
-
-
-# 腾讯财经 API
-
-def _tencent_quote(codes: list[str]) -> dict[str, dict]:
-    """从腾讯财经 (qt.gtimg.cn) 批量获取实时行情。
-
-    Returns:
-        dict[code] -> {name, price, pe_ttm, pb, mcap_yi, ...}
-    """
-    prefixed = [f"{_get_prefix(c)}{c}" for c in codes]
-    url = "https://qt.gtimg.cn/q=" + ",".join(prefixed)
-    req = urllib.request.Request(url)
-    req.add_header("User-Agent", "Mozilla/5.0")
-    resp = urllib.request.urlopen(req, timeout=10)
-    raw = resp.read().decode("gbk")
-
-    result = {}
-    for line in raw.strip().split(";"):
-        if not line.strip() or "=" not in line or '"' not in line:
-            continue
-        key = line.split("=")[0].split("_")[-1]
-        vals = line.split('"')[1].split("~")
-        if len(vals) < 53:
-            continue
-        code = key[2:]  # strip sh/sz/bj prefix
-        result[code] = {
-            "name": vals[1],
-            "price": float(vals[3]) if vals[3] else 0,
-            "last_close": float(vals[4]) if vals[4] else 0,
-            "open": float(vals[5]) if vals[5] else 0,
-            "change_pct": float(vals[32]) if vals[32] else 0,
-            "high": float(vals[33]) if vals[33] else 0,
-            "low": float(vals[34]) if vals[34] else 0,
-            "turnover_pct": float(vals[38]) if vals[38] else 0,
-            "pe_ttm": float(vals[39]) if vals[39] else 0,
-            "mcap_yi": float(vals[44]) if vals[44] else 0,
-            "float_mcap_yi": float(vals[45]) if vals[45] else 0,
-            "pb": float(vals[46]) if vals[46] else 0,
-            "limit_up": float(vals[47]) if vals[47] else 0,
-            "limit_down": float(vals[48]) if vals[48] else 0,
-            "pe_static": float(vals[52]) if vals[52] else 0,
-        }
-    return result
-
-
-# 东方财富数据中心统一查询接口（龙虎榜/解禁 等公用）
-
-_DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-
-
-# 东方财富请求节流与会话复用
-# 所有 eastmoney.com HTTP 请求统一串行节流，降低多 Agent 并发触发临时封禁的概率。
-# 其他数据源不经过此入口；批量任务可通过 EM_MIN_INTERVAL 调高请求间隔。
-_EM_SESSION = _requests.Session()
-_EM_SESSION.headers.update({"User-Agent": _UA})
-# 两次请求的最小间隔可由环境变量覆盖。
-_EM_MIN_INTERVAL = float(os.environ.get("EM_MIN_INTERVAL", "1.0"))
-_em_last_call = [0.0]
-
-
-def _em_get(url, params=None, headers=None, timeout=15, **kwargs):
-    """请求东方财富接口，并执行串行节流和随机抖动。
-
-    传入的 headers 会覆盖会话默认值，以保留端点要求的 Referer 或 Origin。
-    """
-    wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
-    if wait > 0:
-        time.sleep(wait + random.uniform(0.1, 0.5))
-    try:
-        return _EM_SESSION.get(
-            url, params=params, headers=headers, timeout=timeout, **kwargs
-        )
-    finally:
-        _em_last_call[0] = time.time()
-
-
-def _eastmoney_datacenter(
-    report_name: str,
-    columns: str = "ALL",
-    filter_str: str = "",
-    page_size: int = 50,
-    sort_columns: str = "",
-    sort_types: str = "-1",
-) -> list[dict]:
-    """东财数据中心统一查询——龙虎榜/解禁 共用。"""
-    params = {
-        "reportName": report_name,
-        "columns": columns,
-        "filter": filter_str,
-        "pageNumber": "1",
-        "pageSize": str(page_size),
-        "sortColumns": sort_columns,
-        "sortTypes": sort_types,
-        "source": "WEB",
-        "client": "WEB",
-    }
-    r = _em_get(_DATACENTER_URL, params=params, timeout=15)
-    d = r.json()
-    if d.get("result") and d["result"].get("data"):
-        return d["result"]["data"]
-    return []
-
-
-# 同花顺 EPS 一致预期辅助函数（直连 HTTP，无 akshare）
-
-
-def _ths_eps_forecast(code: str) -> pd.DataFrame:
-    """从同花顺获取一致预期 EPS（直连 HTTP）。
-
-    Returns:
-        大致包含以下列的 DataFrame：年度、预测机构数、最小值、均值、最大值。
-    """
-    url = f"https://basic.10jqka.com.cn/new/{code}/worth.html"
-    headers = {
-        "User-Agent": _UA,
-        "Referer": "https://basic.10jqka.com.cn/",
-    }
-    r = _requests.get(url, headers=headers, timeout=15)
-    r.encoding = "gbk"
-    # 抑制 HTML 解析器噪声（lxml/html5lib 可能将原始 HTML 输出到 stderr）
-    import io as _io, contextlib as _contextlib, warnings as _warnings
-    with _contextlib.redirect_stderr(_io.StringIO()):
-        with _warnings.catch_warnings():
-            _warnings.simplefilter("ignore")
-            dfs = pd.read_html(_io.StringIO(r.text))
-    # 查找包含 EPS 数据的表格
-    for df in dfs:
-        cols = [str(c) for c in df.columns]
-        if any("每股收益" in c or "均值" in c for c in cols):
-            return df
-    # 回退：如果存在则返回第一个表格
-    return dfs[0] if dfs else pd.DataFrame()
-
-
-# 新浪 K线备用源（直连 HTTP，无 akshare）
-
-
-def _sina_kline_fallback(code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-    """从新浪 HTTP API 获取日K线，作为 mootdx 的备用数据源。
-
-    Returns:
-        包含以下列的 DataFrame：Date、Open、High、Low、Close、Volume。
-    """
-    prefix = "sh" if code.startswith("6") else "sz"
-    url = (
-        "http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
-        "CN_MarketData.getKLineData"
-    )
-    params = {
-        "symbol": f"{prefix}{code}",
-        "scale": "240",  # 日线
-        "ma": "no",
-        "datalen": "800",
-    }
-    r = _requests.get(url, params=params, timeout=15)
-    r.raise_for_status()
-    data = _json.loads(r.text)
-
-    if not data:
-        return pd.DataFrame()
-
-    rows = []
-    for item in data:
-        rows.append({
-            "Date": item["day"],
-            "Open": float(item["open"]),
-            "High": float(item["high"]),
-            "Low": float(item["low"]),
-            "Close": float(item["close"]),
-            "Volume": int(item["volume"]),
-        })
-
-    df = pd.DataFrame(rows)
-    df["Date"] = pd.to_datetime(df["Date"])
-
-    if start_date:
-        df = df[df["Date"] >= pd.to_datetime(start_date)]
-    if end_date:
-        df = df[df["Date"] <= pd.to_datetime(end_date)]
-
-    return df
 
 
 # OHLCV 数据优先从 mootdx 获取，并以 CSV 缓存。
@@ -455,27 +229,9 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
 
     # 从 mootdx 获取 800 根日K线（约3年交易日）
     try:
-        client = _get_mootdx_client()
-        df = client.bars(symbol=code, category=4, offset=800)
-
-        if df is None or df.empty:
+        df = _get_mootdx_daily_bars(code)
+        if df.empty:
             raise ValueError(f"mootdx 未返回 {code} 的 OHLCV 数据")
-
-        # mootdx 同时返回名为 'datetime' 的索引和列
-        # （外加 year/month/day/hour/minute/volume）。重置索引前先删除重复列。
-        df = df.drop(columns=["datetime", "year", "month", "day", "hour", "minute"], errors="ignore")
-        df = df.reset_index()  # 将索引 'datetime' 移至列 'datetime'
-        rename_map = {
-            "datetime": "Date",
-            "open": "Open",
-            "close": "Close",
-            "high": "High",
-            "low": "Low",
-            "volume": "Volume",
-        }
-        df = df.rename(columns=rename_map)
-        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
-        df["Date"] = pd.to_datetime(df["Date"])
     except Exception as e:
         mootdx_error = e
         # 回退：新浪直连 HTTP API
@@ -821,45 +577,7 @@ def _get_financial_report_sina(
     Args:
         report_type: '资产负债表' | '利润表' | '现金流量表'
     """
-    _report_type_map = {
-        "资产负债表": "fzb",
-        "利润表": "lrb",
-        "现金流量表": "llb",
-    }
-    source_type = _report_type_map.get(report_type, "lrb")
-
-    prefix = "sh" if code.startswith("6") else "sz"
-    paper_code = f"{prefix}{code}"
-    url = "https://quotes.sina.cn/cn/api/openapi.php/CompanyFinanceService.getFinanceReport2022"
-    params = {
-        "paperCode": paper_code,
-        "source": source_type,
-        "type": "0",
-        "page": "1",
-        "num": "20",
-    }
-    r = _requests.get(url, params=params, headers={"User-Agent": _UA}, timeout=15)
-    d = r.json()
-
-    result = d.get("result", {}).get("data", {})
-    items = result.get(source_type, [])
-    if not isinstance(items, list) or not items:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(items)
-
-    # 按 curr_date 过滤
-    if curr_date and "报告日" in df.columns:
-        df["报告日"] = pd.to_datetime(df["报告日"], errors="coerce")
-        cutoff = pd.to_datetime(curr_date)
-        df = df[df["报告日"] <= cutoff]
-
-    # 按频率过滤（年报 = 仅保留12月份报表）
-    if freq.lower() == "annual" and "报告日" in df.columns:
-        months = pd.to_datetime(df["报告日"], errors="coerce").dt.month
-        df = df[months == 12]
-
-    return df.head(8)
+    return _fetch_sina_financial_report(code, report_type, freq, curr_date)
 
 
 def get_balance_sheet(
@@ -1022,7 +740,7 @@ def _fetch_news_sina(code: str, page_size: int = 20) -> list[dict]:
         "Referer": "https://finance.sina.com.cn/",
     }
 
-    resp = _requests.get(url, headers=headers, timeout=15)
+    resp = _sina_get(url, headers=headers, timeout=15)
     resp.raise_for_status()
     resp.encoding = "gb2312"
     html = resp.text
@@ -1136,7 +854,7 @@ def _get_global_news_impl(curr_date: str, look_back_days: int, limit: int) -> st
         cls_url = "https://www.cls.cn/nodeapi/telegraphList"
         cls_params = {"rn": str(limit), "page": "1"}
         cls_headers = {"User-Agent": _UA, "Referer": "https://www.cls.cn/"}
-        r_cls = _requests.get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
+        r_cls = _cls_get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
         r_cls.raise_for_status()
         if not r_cls.content.strip():
             raise ValueError("服务器返回空响应")
@@ -1370,8 +1088,6 @@ def get_hot_stocks(
     返回触及涨停的股票，附带人工精选的涨停原因标签
     （如 '算力租赁+AI政务'），解释其为何大涨。
     """
-    import requests
-
     if not curr_date or curr_date.strip() == "":
         curr_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -1386,7 +1102,7 @@ def get_hot_stocks(
                 "Chrome/117.0.0.0 Safari/537.36"
             )
         }
-        r = requests.get(url, headers=headers, timeout=10)
+        r = _ths_get(url, headers=headers, timeout=10)
         data = r.json()
 
         if data.get("errocode", 0) != 0:
@@ -1509,8 +1225,6 @@ def get_northbound_flow(
     实时数据：分钟级 HGT（沪股通）+ SGT（深股通）累计净买入。
     历史数据：自缓存的每日收盘快照（上游API自2024年8月起停止更新北向历史数据）。
     """
-    import requests
-
     hsgt_headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -1532,7 +1246,7 @@ def get_northbound_flow(
 
     try:
         url_rt = "https://data.hexin.cn/market/hsgtApi/method/dayChart/"
-        r = requests.get(url_rt, headers=hsgt_headers, timeout=10)
+        r = _ths_get(url_rt, headers=hsgt_headers, timeout=10)
         d = r.json()
 
         times = d.get("time", [])
@@ -1626,8 +1340,6 @@ def get_concept_blocks(
     返回申万行业分类、概念主题和地区板块。
     每个板块包含当日涨跌幅。
     """
-    import requests
-
     code = _normalize_ticker(ticker)
 
     try:
@@ -1636,7 +1348,7 @@ def get_concept_blocks(
             f'?stock=[{{"code":"{code}","market":"ab","type":"stock"}}]'
             "&finClientType=pc"
         )
-        r = requests.get(url, headers=_BAIDU_PAE_HEADERS, timeout=10)
+        r = _baidu_get(url, headers=_BAIDU_PAE_HEADERS, timeout=10)
         d = r.json()
 
         if str(d.get("ResultCode", -1)) != "0":
