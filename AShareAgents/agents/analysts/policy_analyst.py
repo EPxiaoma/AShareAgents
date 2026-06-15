@@ -6,6 +6,7 @@ from AShareAgents.tools.agent_utils import (
     get_global_news,
     get_language_instruction,
     get_news,
+    search_policy_industry_knowledge,
 )
 from AShareAgents.datasource.config import get_config
 
@@ -20,6 +21,7 @@ def create_policy_analyst(llm):
         tools = [
             get_news,
             get_global_news,
+            search_policy_industry_knowledge,
         ]
 
         system_message = (
@@ -39,6 +41,10 @@ def create_policy_analyst(llm):
             "\n\n请使用以下工具："
             "\n- `get_news(query, start_date, end_date)`：搜索与公司/行业相关的政策新闻"
             "\n- `get_global_news(curr_date, look_back_days, limit)`：获取宏观经济和政策面新闻"
+            "\n- `search_policy_industry_knowledge(query, curr_date, industry)`：检索分析日之前发布的政策原文、监管规则和行业长期知识"
+            "\n\n在形成结论前，应调用 `search_policy_industry_knowledge` 补充政策原文或行业知识。"
+            "只使用发布日期不晚于当前分析日期的结果，并区分政策原文、行业知识与新闻解读；"
+            "引用时注明资料标题、发布日期和来源，未命中时不得补造政策。"
             "\n\n撰写详细的政策分析报告，明确给出政策面对该公司的总体评级（重大利好/利好/中性/利空/重大利空），并量化影响程度。报告末尾附 Markdown 表格列出关键政策事件、影响方向和持续时间。"
             "\n\n📋 必采清单 — 以下数据点必须出现在报告中，无法获取时标注 [数据缺失: xxx]："
             "\n1. 近期相关政策事件清单（含发布日期和发布机构）"

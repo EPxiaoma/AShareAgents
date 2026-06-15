@@ -1,11 +1,11 @@
 """演示如何使用自定义配置运行 AShareAgents 分析流程。"""
 
-from AShareAgents.workflows.trading_graph import AShareAgentsGraph
-from AShareAgents.config import DEFAULT_CONFIG
-
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from AShareAgents.config import DEFAULT_CONFIG  # noqa: E402
+from AShareAgents.workflows.trading_graph import AShareAgentsGraph  # noqa: E402
 
 # 基于默认配置覆盖示例所需的模型与数据源。
 config = DEFAULT_CONFIG.copy()

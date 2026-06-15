@@ -48,6 +48,8 @@ from AShareAgents.tools.agent_utils import (
     get_dragon_tiger_board,
     get_lockup_expiry,
     get_industry_comparison,
+    search_company_official_documents,
+    search_policy_industry_knowledge,
 )
 
 from .checkpointer import checkpoint_step, clear_checkpoint, get_checkpointer, thread_id
@@ -204,12 +206,14 @@ class AShareAgentsGraph:
                     get_income_statement,
                     get_profit_forecast,
                     get_industry_comparison,
+                    search_company_official_documents,
                 ]
             ),
             "policy": ToolNode(
                 [
                     get_news,
                     get_global_news,
+                    search_policy_industry_knowledge,
                 ]
             ),
             "hot_money": ToolNode(

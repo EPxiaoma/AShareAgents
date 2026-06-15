@@ -11,6 +11,7 @@ from AShareAgents.tools.agent_utils import (
     get_insider_transactions,
     get_language_instruction,
     get_profit_forecast,
+    search_company_official_documents,
 )
 from AShareAgents.datasource.config import get_config
 
@@ -27,6 +28,7 @@ def create_fundamentals_analyst(llm):
             get_income_statement,
             get_profit_forecast,
             get_industry_comparison,
+            search_company_official_documents,
         ]
 
         system_message = (
@@ -44,6 +46,10 @@ def create_fundamentals_analyst(llm):
             "\n- `get_cashflow`：现金流量表详细数据"
             "\n- `get_income_statement`：利润表详细数据"
             "\n- `get_industry_comparison(ticker, curr_date)`：获取全行业横向对比（90个行业涨跌幅/成交额/净流入排名，用于估值对标和行业定位）"
+            "\n- `search_company_official_documents(query, ticker, curr_date)`：检索分析日之前发布的公司公告、财报和投资者关系资料"
+            "\n\n在形成结论前，应调用 `search_company_official_documents` 补充公司官方资料。"
+            "只使用发布日期不晚于当前分析日期的结果，并在引用时注明资料标题、发布日期和来源；"
+            "若工具不可用或未命中，不得虚构官方资料。"
             "\n\n撰写详尽的基本面研究报告，给出具体数据支撑的分析结论（仅供研究参考，不构成投资建议）。报告末尾附 Markdown 表格汇总关键财务指标和估值水平。"
             "\n\n📋 必采清单 — 以下数据点必须出现在报告中，无法获取时标注 [数据缺失: xxx]："
             "\n1. PE（TTM）、PB、总市值"

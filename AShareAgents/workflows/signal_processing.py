@@ -2,7 +2,7 @@
 
 投资组合经理通过结构化输出生成 ``PortfolioDecision``，并渲染为始终包含
 ``**Rating**: X`` 标题的Markdown文本（参见
-:func:`AShareAgents.models.schemas.render_pm_decision`）。
+:func:`AShareAgents.models.agent_schemas.render_pm_decision`）。
 :mod:`AShareAgents.tools.rating` 中的确定性启发式方法足以提取该评级，
 无需额外调用LLM。
 

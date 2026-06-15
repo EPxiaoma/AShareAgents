@@ -2,6 +2,13 @@
 
 import os
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _CACHE_DIR = os.path.join(_PROJECT_ROOT, "cache")
 
@@ -12,6 +19,35 @@ DEFAULT_CONFIG = {
     "memory_log_path": os.getenv("ASHAREAGENTS_MEMORY_LOG_PATH", os.path.join(_CACHE_DIR, "memory", "trading_memory.md")),
     # 仅裁剪最早的已解决条目；待处理条目始终保留，None 表示不限制。
     "memory_log_max_entries": None,
+    # RAG 与 Milvus 配置。BGE 集合与旧的 OpenAI 嵌入集合分开存放。
+    "rag_enabled": _env_bool("RAG_ENABLED", True),
+    "rag_embedding_model": os.getenv(
+        "RAG_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"
+    ),
+    "rag_embedding_dimension": int(os.getenv("RAG_EMBEDDING_DIMENSION", "512")),
+    "rag_model_device": os.getenv("RAG_MODEL_DEVICE", "cpu"),
+    "rag_reranker_model": os.getenv(
+        "RAG_RERANKER_MODEL", "BAAI/bge-reranker-base"
+    ),
+    "rag_parent_chunk_size": int(os.getenv("RAG_PARENT_CHUNK_SIZE", "800")),
+    "rag_parent_chunk_overlap": int(os.getenv("RAG_PARENT_CHUNK_OVERLAP", "100")),
+    "rag_child_chunk_size": int(os.getenv("RAG_CHILD_CHUNK_SIZE", "200")),
+    "rag_child_chunk_overlap": int(os.getenv("RAG_CHILD_CHUNK_OVERLAP", "40")),
+    "rag_vector_top_k": int(os.getenv("RAG_VECTOR_TOP_K", "20")),
+    "rag_bm25_top_k": int(os.getenv("RAG_BM25_TOP_K", "20")),
+    "rag_bm25_candidate_pool": int(
+        os.getenv("RAG_BM25_CANDIDATE_POOL", "1000")
+    ),
+    "rag_rerank_top_n": int(os.getenv("RAG_RERANK_TOP_N", "30")),
+    "rag_rrf_k": int(os.getenv("RAG_RRF_K", "60")),
+    "rag_retrieval_top_k": int(os.getenv("RAG_RETRIEVAL_TOP_K", "5")),
+    "rag_max_context_chars": int(os.getenv("RAG_MAX_CONTEXT_CHARS", "12000")),
+    "milvus_uri": os.getenv("MILVUS_URI", "http://39.105.217.174:19530"),
+    "milvus_token": os.getenv("MILVUS_TOKEN", ""),
+    "milvus_database": os.getenv("MILVUS_DATABASE", "default"),
+    "milvus_collection": os.getenv(
+        "MILVUS_COLLECTION", "ashareagents_knowledge_bge"
+    ),
     # LLM 配置
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.4",

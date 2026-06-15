@@ -222,3 +222,4 @@ cache/
 /scripts/
 /.idea/
 /.codex-dev-pids
+/tests/

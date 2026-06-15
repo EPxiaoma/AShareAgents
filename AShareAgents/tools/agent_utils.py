@@ -30,6 +30,10 @@ from AShareAgents.tools.signal_data_tools import (
     get_lockup_expiry,
     get_industry_comparison,
 )
+from AShareAgents.rag.tools import (
+    search_company_official_documents,
+    search_policy_industry_knowledge,
+)
 
 
 def get_language_instruction() -> str:
