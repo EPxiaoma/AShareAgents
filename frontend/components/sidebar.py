@@ -159,6 +159,18 @@ def render_sidebar() -> None:
             }
             st.session_state["viewing_history"] = None
 
+    if tracker is not None and st.session_state.get("viewing_history"):
+        if tracker.is_running:
+            return_label = "← 返回正在运行的分析"
+        elif tracker.is_complete:
+            return_label = "← 返回当前分析结果"
+        else:
+            return_label = "← 返回当前分析状态"
+
+        if st.button(return_label, use_container_width=True, type="primary"):
+            st.session_state["viewing_history"] = None
+            st.rerun()
+
     st.markdown("---")
     st.markdown("#### 历史记录")
 
@@ -179,4 +191,5 @@ def render_sidebar() -> None:
             ):
                 st.session_state["viewing_history"] = entry["path"]
                 st.session_state["start_analysis"] = None
+                st.rerun()
 
