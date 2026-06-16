@@ -19,7 +19,7 @@ DEFAULT_CONFIG = {
     "memory_log_path": os.getenv("ASHAREAGENTS_MEMORY_LOG_PATH", os.path.join(_CACHE_DIR, "memory", "trading_memory.md")),
     # 仅裁剪最早的已解决条目；待处理条目始终保留，None 表示不限制。
     "memory_log_max_entries": None,
-    # RAG 与 Milvus 配置。BGE 集合与旧的 OpenAI 嵌入集合分开存放。
+    # 检索增强与 Milvus 配置。BGE 集合与旧 OpenAI 嵌入集合分开存放。
     "rag_enabled": _env_bool("RAG_ENABLED", True),
     "rag_embedding_model": os.getenv(
         "RAG_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"
@@ -48,11 +48,11 @@ DEFAULT_CONFIG = {
     "milvus_collection": os.getenv(
         "MILVUS_COLLECTION", "ashareagents_knowledge_bge"
     ),
-    # LLM 配置
+    # 大语言模型配置
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.4",
     "quick_think_llm": "gpt-5.4-mini",
-    # None 表示使用供应商默认端点，避免切换供应商时复用不兼容的 URL。
+    # 空值表示使用供应商默认端点，避免切换供应商时复用不兼容的 URL。
     "backend_url": None,
     # 各供应商专用的推理强度参数。
     "google_thinking_level": None,

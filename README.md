@@ -72,7 +72,6 @@ AShareAgents/
 ├── AShareAgents/                 # 核心 Python 包
 │   ├── agents/                   # 分析师、研究员、交易员与风控 Agent
 │   ├── api/                      # API 模块
-│   ├── context/                  # 上下文工程
 │   ├── datasource/               # 数据源路由与供应商适配器
 │   │   ├── astock/               # A股数据聚合、回退与格式化
 │   │   ├── alphaVantage/         # Alpha Vantage

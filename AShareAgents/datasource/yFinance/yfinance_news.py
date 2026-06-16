@@ -7,7 +7,7 @@ import yfinance as yf
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from .stockstats_utils import yf_retry
+from .stockstats_tools import yf_retry
 
 
 def _extract_article_data(article: dict) -> dict:

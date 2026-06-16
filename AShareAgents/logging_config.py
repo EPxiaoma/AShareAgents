@@ -68,5 +68,5 @@ def setup_logging(*, verbose: bool = False) -> None:
     for name in _SILENCE:
         logging.getLogger(name).setLevel(logging.ERROR)
 
-    # Streamlit 自身在 INFO 级别过于啰嗦；保持 WARNING 级别
+    # 保持 Streamlit 在 WARNING 级别，避免 INFO 日志过于啰嗦。
     logging.getLogger("streamlit").setLevel(logging.WARNING)

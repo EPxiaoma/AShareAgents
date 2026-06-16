@@ -12,7 +12,7 @@ import fpdf as _fpdf_mod
 from fpdf import FPDF
 
 
-# fpdf2 与废弃的 pyfpdf 共用导入名；提前识别旧版本，避免中文渲染时才失败。
+# 这里提前识别 fpdf2 与废弃 pyfpdf 共用导入名的问题，避免中文渲染时才失败。
 _FPDF_VERSION = getattr(_fpdf_mod, "__version__", None) or getattr(_fpdf_mod, "FPDF_VERSION", "0")
 
 
@@ -246,7 +246,7 @@ class _ReportPDF(FPDF):
                 i += 1
                 continue
 
-        # Markdown 标题层级映射到固定字号。
+        # 将 Markdown 标题层级映射到固定字号。
             if stripped.startswith("###"):
                 self._use_font("B", 11)
                 self.set_text_color(50, 50, 50)

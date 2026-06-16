@@ -22,7 +22,7 @@ def get_indicators(
     Returns:
         str: 包含指定股票代码和指标的技术指标格式化 DataFrame。
     """
-    # LLM 有时会把多个指标用逗号分隔传进来；
+    # 大语言模型有时会把多个指标用逗号分隔传进来；
     # 将字符串拆分并逐个处理。
     indicators = [i.strip().lower() for i in indicator.split(",") if i.strip()]
     results = []

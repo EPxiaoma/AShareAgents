@@ -1,4 +1,4 @@
-"""Exception boundaries shared by A-share data-source adapters."""
+"""A 股数据源适配器共享的异常边界。"""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import pandas as pd
 from requests import exceptions as requests_exceptions
 
 
-# These failures can reasonably be caused by remote services, malformed payloads,
-# local caches, or user-supplied values. Programming errors such as AttributeError
-# and AssertionError are deliberately excluded so they are not hidden by fallbacks.
+# 这些失败通常来自远端服务、异常载荷、本地缓存或用户输入。
+# 编程错误如 AttributeError、AssertionError 等刻意不放入此列表，
+# 避免被数据源回退逻辑吞掉。
 RECOVERABLE_DATA_SOURCE_ERRORS = (
     requests_exceptions.RequestException,
     urllib.error.URLError,
@@ -28,7 +28,7 @@ RECOVERABLE_DATA_SOURCE_ERRORS = (
 
 
 def describe_data_source_error(exc: BaseException) -> str:
-    """Return a concise, user-facing summary without leaking long request URLs."""
+    """返回面向用户的简短错误摘要，避免泄露过长请求 URL。"""
     host = ""
     request = getattr(exc, "request", None)
     response = getattr(exc, "response", None)

@@ -1,4 +1,4 @@
-"""Server-side access to saved analysis reports."""
+"""已保存分析报告的服务端访问逻辑。"""
 
 from __future__ import annotations
 

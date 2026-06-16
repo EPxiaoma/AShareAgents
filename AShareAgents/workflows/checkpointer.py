@@ -15,7 +15,7 @@ from typing import Generator
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from AShareAgents.datasource.utils import safe_ticker_component
+from AShareAgents.datasource.ticker_safety import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 

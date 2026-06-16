@@ -7,7 +7,7 @@ import functools
 from langchain_core.messages import AIMessage
 
 from AShareAgents.models.agent_schemas import TraderProposal, render_trader_proposal
-from AShareAgents.tools.agent_utils import build_instrument_context, get_language_instruction
+from AShareAgents.tools.agent_helpers import build_instrument_context, get_language_instruction
 from AShareAgents.tools.structured import (
     bind_structured,
     invoke_structured_or_freetext,

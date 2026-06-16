@@ -1,4 +1,4 @@
-"""FastAPI routes for analysis tasks and saved reports."""
+"""分析任务和已保存报告的 FastAPI 路由。"""
 
 from __future__ import annotations
 

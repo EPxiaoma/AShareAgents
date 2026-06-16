@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from AShareAgents.models.agent_schemas import PortfolioDecision, render_pm_decision
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
     get_language_instruction,
 )

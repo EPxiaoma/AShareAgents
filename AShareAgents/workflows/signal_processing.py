@@ -20,8 +20,8 @@ class SignalProcessor:
     """从投资组合经理的决策文本中提取五级评级。"""
 
     def __init__(self, quick_thinking_llm: Any = None):
-        # LLM参数仅为向后兼容而保留，实际不再使用：
-        # PM的结构化输出确保评级可从渲染的Markdown中解析，无需二次LLM调用。
+        # 大语言模型参数仅为向后兼容而保留，实际不再使用：
+        # 投资组合经理的结构化输出确保评级可从渲染的 Markdown 中解析，无需二次大语言模型调用。
         self.quick_thinking_llm = quick_thinking_llm
 
     def process_signal(self, full_signal: str) -> str:

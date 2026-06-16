@@ -1,4 +1,4 @@
-"""Frontend helpers for history data served by the FastAPI backend."""
+"""处理 FastAPI 后端历史数据的前端辅助函数。"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def load_history(history_id: str) -> dict[str, Any]:
 
 
 def extract_signal(state: dict[str, Any]) -> str:
-    """Extract the five-level portfolio rating from an analysis state."""
+    """从分析状态中提取五档组合评级。"""
     from AShareAgents.tools.rating import parse_rating
 
     candidates: list[Any] = [

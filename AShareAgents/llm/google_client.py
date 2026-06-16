@@ -43,19 +43,19 @@ class GoogleClient(BaseLLMClient):
             llm_kwargs["google_api_key"] = google_api_key
 
         # 根据模型将 thinking_level 映射到相应的 API 参数
-        # Gemini 3 Pro: low, high
-        # Gemini 3 Flash: minimal, low, medium, high
-        # Gemini 2.5: thinking_budget (0=禁用, -1=动态)
+        # 模型 Gemini 3 Pro 支持：low、high
+        # 模型 Gemini 3 Flash 支持：minimal、low、medium、high
+        # 模型 Gemini 2.5 使用 thinking_budget 参数：0 表示禁用，-1 表示动态
         thinking_level = self.kwargs.get("thinking_level")
         if thinking_level:
             model_lower = self.model.lower()
             if "gemini-3" in model_lower:
-                # Gemini 3 Pro 不支持 "minimal"，使用 "low" 代替
+                # 模型 Gemini 3 Pro 不支持 "minimal"，使用 "low" 代替
                 if "pro" in model_lower and thinking_level == "minimal":
                     thinking_level = "low"
                 llm_kwargs["thinking_level"] = thinking_level
             else:
-                # Gemini 2.5：映射到 thinking_budget
+                # 模型 Gemini 2.5：映射到 thinking_budget
                 llm_kwargs["thinking_budget"] = -1 if thinking_level == "high" else 0
 
         return NormalizedChatGoogleGenerativeAI(**llm_kwargs)

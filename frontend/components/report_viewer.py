@@ -85,7 +85,7 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Markdown 无字体依赖；PDF 延迟生成，失败时不影响结果页面。
+    # 导出 Markdown 无字体依赖；PDF 延迟生成，失败时不影响结果页面。
     col_md, col_pdf, col_spacer = st.columns([1, 1, 2])
     with col_md:
         md_text = generate_markdown(final_state, ticker, trade_date, signal)

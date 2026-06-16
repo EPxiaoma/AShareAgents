@@ -26,7 +26,7 @@ def get_stock(
     today = datetime.now()
 
     # 根据请求范围是否在最近100天内选择outputsize
-    # Compact返回最近100个数据点，检查start_date是否足够近
+    # 紧凑模式返回最近 100 个数据点，检查 start_date 是否足够近。
     days_from_today_to_start = (today - start_dt).days
     outputsize = "compact" if days_from_today_to_start < 100 else "full"
 

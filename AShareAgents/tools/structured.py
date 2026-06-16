@@ -40,7 +40,7 @@ def _model_key(llm: Any) -> tuple[str, str]:
 
 
 def _model_label(llm: Any) -> str:
-    """Return a compact model label suitable for console messages."""
+    """返回适合控制台消息展示的简短模型标签。"""
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", "未知模型"))
 
 

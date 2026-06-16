@@ -114,7 +114,7 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Custom model ID", "custom"),
         ],
     },
-    # OpenRouter：动态获取。Azure：可使用任何已部署的模型名称。
+    # 模型来源说明：OpenRouter 动态获取；Azure 可使用任何已部署的模型名称。
     "ollama": {
         "quick": [
             ("Qwen3:latest (8B, local)", "qwen3:latest"),

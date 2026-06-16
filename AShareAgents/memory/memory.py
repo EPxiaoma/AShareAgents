@@ -10,7 +10,7 @@ from AShareAgents.tools.rating import parse_rating
 class TradingMemoryLog:
     """追加式 Markdown 交易决策和反思日志。"""
 
-    # HTML 注释：不会出现在 LLM 文本输出中，作为安全的硬分隔符
+    # 使用 HTML 注释作为安全硬分隔符，不会出现在大语言模型文本输出中。
     _SEPARATOR = "\n\n<!-- ENTRY_END -->\n\n"
     # 预编译的正则模式 — 避免每次 load_entries() 调用重复编译
     _DECISION_RE = re.compile(r"DECISION:\n(.*?)(?=\nREFLECTION:|\Z)", re.DOTALL)

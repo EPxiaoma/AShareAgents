@@ -1,10 +1,12 @@
 """政策分析师模块，追踪和解读影响 A 股市场的宏观政策、监管政策和产业政策，评估政策对股价的潜在影响。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
-    get_global_news,
     get_language_instruction,
+)
+from AShareAgents.tools.tool_registry import (
+    get_global_news,
     get_news,
     search_policy_industry_knowledge,
 )

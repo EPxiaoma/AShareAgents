@@ -87,7 +87,7 @@ def _render_llm_config() -> None:
         st.session_state["quick_think_llm"] = custom_quick
         st.session_state["deep_think_llm"] = custom_deep
 
-    # st.text_input(
+    # 已停用的后端地址输入框示例：
     #     "API Base URL（第三方/代理，可选）",
     #     key="llm_base_url",
     #     placeholder="例: https://your-proxy.com/v1",

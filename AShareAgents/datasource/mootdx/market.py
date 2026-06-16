@@ -10,7 +10,7 @@ _client = None
 
 
 def get_client():
-    """Return a process-wide reusable mootdx client."""
+    """返回进程内可复用的 mootdx 客户端。"""
     global _client
     if _client is None:
         from mootdx.quotes import Quotes
@@ -38,7 +38,7 @@ def build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
 
 
 def get_daily_bars(code: str, count: int = 800) -> pd.DataFrame:
-    """Return normalized daily OHLCV bars for a six-digit stock code."""
+    """返回六位股票代码对应的标准化日线 OHLCV 数据。"""
     df = get_client().bars(symbol=code, category=4, offset=count)
     if df is None or df.empty:
         return pd.DataFrame()

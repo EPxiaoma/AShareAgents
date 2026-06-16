@@ -1,7 +1,8 @@
 """市场情绪分析师模块，通过分析新闻和舆论推断 A 股市场情绪方向、强度和可能的转折点。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import build_instrument_context, get_language_instruction, get_news
+from AShareAgents.tools.agent_helpers import build_instrument_context, get_language_instruction
+from AShareAgents.tools.tool_registry import get_news
 from AShareAgents.datasource.config import get_config
 
 

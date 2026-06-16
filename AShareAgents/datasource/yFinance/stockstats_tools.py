@@ -13,7 +13,7 @@ from stockstats import wrap
 from typing import Annotated
 import os
 from ..config import get_config
-from ..utils import safe_ticker_component
+from ..ticker_safety import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ def filter_financials_by_date(data: pd.DataFrame, curr_date: str) -> pd.DataFram
     return data.loc[:, mask]
 
 
-class StockstatsUtils:
+class StockstatsTools:
     @staticmethod
     def get_stock_stats(
         symbol: Annotated[str, "公司股票代码"],

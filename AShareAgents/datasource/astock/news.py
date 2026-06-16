@@ -103,7 +103,7 @@ def fetch_sina_company_news(code: str, page_size: int = 20) -> list[dict]:
 
 
 def get_company_news(code: str, start_date: str, end_date: str) -> str:
-    """Return company news, falling back from Eastmoney to Sina."""
+    """返回公司新闻，东方财富不可用时回退到新浪。"""
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
     if start_dt > end_dt:

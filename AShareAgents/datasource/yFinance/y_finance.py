@@ -13,7 +13,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry, load_ohlcv, filter_financials_by_date
+from .stockstats_tools import StockstatsTools, _clean_dataframe, yf_retry, load_ohlcv, filter_financials_by_date
 
 def get_YFin_data_online(
     symbol: Annotated[str, "公司股票代码"],
@@ -77,7 +77,7 @@ def get_stock_stats_indicators_window(
             "用法：捕捉动量的快速转变和潜在入场点。"
             "提示：在震荡市场中易受噪声干扰，需结合更长周期的均线过滤假信号。"
         ),
-        # MACD 相关
+        # 与 MACD 相关
         "macd": (
             "MACD：通过EMA差值计算动量。"
             "用法：观察交叉和背离作为趋势变化的信号。"
@@ -235,7 +235,7 @@ def get_stockstats_indicator(
     curr_date = curr_date_dt.strftime("%Y-%m-%d")
 
     try:
-        indicator_value = StockstatsUtils.get_stock_stats(
+        indicator_value = StockstatsTools.get_stock_stats(
             symbol,
             indicator,
             curr_date,

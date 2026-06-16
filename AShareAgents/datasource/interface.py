@@ -106,19 +106,19 @@ VENDOR_LIST = [
 
 # 方法到供应商实现的映射
 VENDOR_METHODS = {
-    # core_stock_apis
+    # 核心行情数据
     "get_stock_data": {
         "a_stock": get_astock_stock_data,
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
     },
-    # technical_indicators
+    # 技术指标数据
     "get_indicators": {
         "a_stock": get_astock_indicators,
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
     },
-    # fundamental_data
+    # 基本面数据
     "get_fundamentals": {
         "a_stock": get_astock_fundamentals,
         "alpha_vantage": get_alpha_vantage_fundamentals,
@@ -139,7 +139,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
     },
-    # news_data
+    # 新闻数据
     "get_news": {
         "a_stock": get_astock_news,
         "alpha_vantage": get_alpha_vantage_news,
@@ -155,7 +155,7 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
     },
-    # signal_data（仅A股）
+    # 信号数据（仅 A 股）
     "get_profit_forecast": {
         "a_stock": get_astock_profit_forecast,
     },

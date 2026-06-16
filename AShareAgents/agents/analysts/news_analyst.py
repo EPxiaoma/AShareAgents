@@ -1,10 +1,12 @@
 """新闻分析师模块，收集和分析 A 股市场新闻动态，评估政策、行业和公司层面消息对股价的影响。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
-    get_global_news,
     get_language_instruction,
+)
+from AShareAgents.tools.tool_registry import (
+    get_global_news,
     get_news,
 )
 from AShareAgents.datasource.config import get_config

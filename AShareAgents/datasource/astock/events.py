@@ -9,7 +9,7 @@ from datetime import datetime
 import pandas as pd
 
 from ..eastMoney import datacenter, get as eastmoney_get
-from ..utils import safe_ticker_component
+from ..ticker_safety import safe_ticker_component
 from .errors import RECOVERABLE_DATA_SOURCE_ERRORS, describe_data_source_error
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def get_dragon_tiger_board(
     trade_date: str,
     look_back_days: int = 30,
 ) -> str:
-    """Return billboard records, top seats, and institutional activity."""
+    """返回龙虎榜记录、主要席位和机构动向。"""
     if look_back_days <= 0:
         raise ValueError("look_back_days must be positive")
     code = safe_ticker_component(ticker)
@@ -142,7 +142,7 @@ def get_lockup_expiry(
     trade_date: str,
     forward_days: int = 90,
 ) -> str:
-    """Return historical and upcoming restricted-share releases."""
+    """返回历史和未来限售股解禁安排。"""
     if forward_days < 0:
         raise ValueError("forward_days must be non-negative")
     code = safe_ticker_component(ticker)
@@ -212,7 +212,7 @@ def get_industry_comparison(
     trade_date: str,
     top_n: int = 20,
 ) -> str:
-    """Return Eastmoney industry performance rankings."""
+    """返回东方财富行业表现排名。"""
     if top_n <= 0:
         raise ValueError("top_n must be positive")
     code = safe_ticker_component(ticker)

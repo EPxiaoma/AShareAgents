@@ -1,10 +1,12 @@
 """技术分析师模块，基于 K 线数据和技术指标（均线、MACD、RSI、布林带等）为 A 股标的提供技术面分析。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
-    get_indicators,
     get_language_instruction,
+)
+from AShareAgents.tools.tool_registry import (
+    get_indicators,
     get_stock_data,
 )
 from AShareAgents.datasource.config import get_config

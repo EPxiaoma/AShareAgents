@@ -79,7 +79,7 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
 
     response_text = response.text
 
-    # Alpha Vantage 的错误与限流响应通常为 JSON，数据响应通常为 CSV。
+    # 来自 Alpha Vantage 的错误与限流响应通常为 JSON，数据响应通常为 CSV。
     try:
         response_json = json.loads(response_text)
         if "Information" in response_json:
@@ -110,7 +110,7 @@ def _filter_csv_by_date_range(csv_data: str, start_date: str, end_date: str) -> 
     try:
         df = pd.read_csv(StringIO(csv_data))
 
-        # Alpha Vantage CSV 的首列为时间戳。
+        # 来自 Alpha Vantage 的 CSV 首列为时间戳。
         date_col = df.columns[0]
         df[date_col] = pd.to_datetime(df[date_col])
 

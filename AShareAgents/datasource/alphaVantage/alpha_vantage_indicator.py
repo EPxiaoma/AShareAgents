@@ -151,7 +151,7 @@ def get_indicator(
                 "datatype": "csv"
             })
         elif indicator == "vwma":
-            # Alpha Vantage 没有直接提供VWMA，因此返回提示信息
+            # 来自 Alpha Vantage 的接口没有直接提供 VWMA，因此返回提示信息。
             # 实际使用时需要从OHLCV数据计算
             return f"## {symbol} 的 VWMA (成交量加权移动平均线):\n\nVWMA 计算需要 OHLCV 数据，无法直接从 Alpha Vantage API 获取。\n该指标需通过原始股票数据使用成交量加权价格平均进行计算。\n\n{indicator_descriptions.get('vwma', '暂无描述信息。')}"
         else:

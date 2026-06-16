@@ -173,7 +173,7 @@ class OpenAIClient(BaseLLMClient):
         if self.provider == "openai":
             llm_kwargs["use_responses_api"] = True
 
-        # DeepSeek 的思考模式怪癖放在自己的子类中，以保持
+        # 将 DeepSeek 的思考模式特殊处理放在自己的子类中，以保持
         # 基础 NormalizedChatOpenAI 不包含供应商特定的分支。
         chat_cls = DeepSeekChatOpenAI if self.provider == "deepseek" else NormalizedChatOpenAI
         return chat_cls(**llm_kwargs)

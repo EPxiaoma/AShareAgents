@@ -1,15 +1,17 @@
 """基本面分析师模块，提供基于财务数据（利润表、资产负债表、现金流量表）的 A 股公司基本面分析功能，支持行业横向对比和估值分析。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
+    get_language_instruction,
+)
+from AShareAgents.tools.tool_registry import (
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
     get_industry_comparison,
     get_insider_transactions,
-    get_language_instruction,
     get_profit_forecast,
     search_company_official_documents,
 )

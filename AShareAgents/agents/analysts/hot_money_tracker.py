@@ -1,15 +1,17 @@
 """游资追踪分析师模块，追踪 A 股市场资金流向、成交量异动和主力资金动向，分析短期资金博弈格局。"""
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from AShareAgents.tools.agent_utils import (
+from AShareAgents.tools.agent_helpers import (
     build_instrument_context,
+    get_language_instruction,
+)
+from AShareAgents.tools.tool_registry import (
     get_concept_blocks,
     get_dragon_tiger_board,
     get_fund_flow,
     get_hot_stocks,
     get_industry_comparison,
     get_insider_transactions,
-    get_language_instruction,
     get_news,
     get_northbound_flow,
     get_stock_data,
