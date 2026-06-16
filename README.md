@@ -42,6 +42,12 @@ cp .env.example .env
 最少提供一个模型 API KEY。 建议配置多个模型 API KEY，前端可以根据需求进行选择。
 
 ### 项目启动
+FastAPI 后端：
+```bash
+uvicorn AShareAgents.api.app:app --host 127.0.0.1 --port 8000
+```
+
+Streamlit 前端：
 ```bash
 streamlit run frontend/app.py
 ```

@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from AShareAgents.api.client import APIError, get_api_client
 from AShareAgents.llm.model_catalog import MODEL_OPTIONS
 from frontend.history import get_history
 
@@ -32,12 +33,10 @@ def _resolve_user_input(raw: str) -> tuple[str, str | None]:
     接受6位数字代码或中文股票名称（如 '宝光股份'）。
     成功时返回 (code, None)，失败时返回 ("", error_msg)。
     """
-    from AShareAgents.datasource.astock.a_stock import resolve_ticker
-
     try:
-        code = resolve_ticker(raw)
+        code = get_api_client().resolve_ticker(raw)
         return code, None
-    except Exception:
+    except APIError:
         import logging
         logging.getLogger(__name__).warning("Failed to resolve ticker %r", raw)
         return "", "股票名称解析失败，请检查网络连接后重试，或直接输入6位数字代码"
@@ -174,7 +173,11 @@ def render_sidebar() -> None:
     st.markdown("---")
     st.markdown("#### 历史记录")
 
-    history = get_history()
+    try:
+        history = get_history()
+    except APIError as exc:
+        st.error(str(exc))
+        history = []
     if not history:
         st.markdown(
             '<p style="margin:0; color:#888; font-size:0.875rem;">暂无历史记录</p>',

@@ -20,14 +20,13 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 load_dotenv(_PROJECT_ROOT / ".env")
 
-from AShareAgents.config import DEFAULT_CONFIG  # noqa: E402
+from AShareAgents.api.client import APIError, get_api_client  # noqa: E402
 
 from frontend.components.progress_panel import render_progress  # noqa: E402
 from frontend.components.report_viewer import render_report  # noqa: E402
 from frontend.components.sidebar import render_sidebar  # noqa: E402
-from frontend.history import extract_signal, load_analysis  # noqa: E402
+from frontend.history import load_history  # noqa: E402
 from frontend.progress import ProgressTracker  # noqa: E402
-from frontend.runner import run_analysis_in_thread  # noqa: E402
 
 # 页面配置
 
@@ -158,20 +157,13 @@ st.markdown(
 # 运行配置
 
 def _build_config() -> dict:
-    config = DEFAULT_CONFIG.copy()
+    config: dict[str, object] = {}
     config["llm_provider"] = st.session_state.get("llm_provider", "minimax")
     config["deep_think_llm"] = st.session_state.get("deep_think_llm", "MiniMax-M2.7")
     config["quick_think_llm"] = st.session_state.get("quick_think_llm", "MiniMax-M2.7-highspeed")
     # 侧边栏显式输入优先于环境变量，便于临时切换代理端点。
     backend_url = (st.session_state.get("llm_base_url") or os.getenv("BACKEND_URL") or "").strip()
     config["backend_url"] = backend_url or None
-    config["data_vendors"] = {
-        "core_stock_apis": "a_stock",
-        "technical_indicators": "a_stock",
-        "fundamental_data": "a_stock",
-        "news_data": "a_stock",
-        "signal_data": "a_stock",
-    }
     config["max_debate_rounds"] = 1
     config["max_risk_discuss_rounds"] = 1
     config["output_language"] = "Chinese"
@@ -193,18 +185,32 @@ if start_req:
         trade_date=start_req["trade_date"],
     )
     st.session_state["tracker"] = tracker
-    run_analysis_in_thread(
-        ticker=start_req["ticker"],
-        trade_date=start_req["trade_date"],
-        config=_build_config(),
-        tracker=tracker,
-    )
+    try:
+        tracker.task_id = get_api_client().start_analysis(
+            ticker=start_req["ticker"],
+            trade_date=start_req["trade_date"],
+            config=_build_config(),
+        )
+        tracker.is_running = True
+    except APIError as exc:
+        tracker.mark_error(str(exc))
 
 
 # 主区域状态机
 
 tracker: ProgressTracker | None = st.session_state.get("tracker")
 viewing_history: str | None = st.session_state.get("viewing_history")
+
+if tracker and tracker.task_id and (tracker.is_running or not tracker.final_state):
+    try:
+        client = get_api_client()
+        tracker.update_from_api(client.get_analysis(tracker.task_id))
+        if tracker.is_complete and not tracker.final_state:
+            result = client.get_analysis_result(tracker.task_id)
+            tracker.final_state = result["final_state"]
+            tracker.signal = result["signal"]
+    except APIError as exc:
+        tracker.mark_error(str(exc))
 
 
 def _render_disclaimer() -> None:
@@ -231,11 +237,13 @@ def _render_disclaimer() -> None:
 # 历史结果优先于当前任务状态展示。
 if viewing_history:
     try:
-        state = load_analysis(viewing_history)
-        signal = extract_signal(state)
-        ticker = Path(viewing_history).parent.parent.name
-        trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
-        render_report(state, ticker, trade_date, signal)
+        history = load_history(viewing_history)
+        render_report(
+            history["final_state"],
+            history["ticker"],
+            history["trade_date"],
+            history["signal"],
+        )
     except Exception as exc:
         st.error(f"加载失败: {exc}")
 

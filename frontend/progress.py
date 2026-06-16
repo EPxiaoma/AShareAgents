@@ -32,6 +32,7 @@ class ProgressTracker:
 
     ticker: str = ""
     trade_date: str = ""
+    task_id: str = ""
     start_time: float = field(default_factory=time.time)
 
     is_running: bool = False
@@ -83,6 +84,28 @@ class ProgressTracker:
             self.tool_calls = tool
             self.tokens_in = tok_in
             self.tokens_out = tok_out
+
+    def update_from_api(self, snapshot: dict[str, Any]) -> None:
+        """Replace local display state with a backend task snapshot."""
+        status = snapshot.get("status", "pending")
+        stats = snapshot.get("stats") or {}
+        with self._lock:
+            self.task_id = str(snapshot.get("task_id", self.task_id))
+            self.ticker = str(snapshot.get("ticker", self.ticker))
+            self.trade_date = str(snapshot.get("trade_date", self.trade_date))
+            self.current_stage = str(snapshot.get("current_stage", ""))
+            self.completed_stages = list(snapshot.get("completed_stages") or [])
+            self.stage_reports = dict(snapshot.get("stage_reports") or {})
+            self.llm_calls = int(stats.get("llm_calls", 0))
+            self.tool_calls = int(stats.get("tool_calls", 0))
+            self.tokens_in = int(stats.get("tokens_in", 0))
+            self.tokens_out = int(stats.get("tokens_out", 0))
+            self.signal = str(snapshot.get("signal", self.signal))
+            self.error = snapshot.get("error")
+            self.is_running = status in {"pending", "running"}
+            self.is_complete = status == "completed"
+            elapsed = float(snapshot.get("elapsed", 0.0))
+            self.start_time = time.time() - max(0.0, elapsed)
 
     @property
     def elapsed(self) -> float:

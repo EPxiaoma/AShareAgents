@@ -6,7 +6,7 @@ from typing import Any, Iterable, List, Optional
 
 from langchain_core.documents import Document
 
-from AShareAgents.models.milvus_schema import (
+from AShareAgents.models.milvus_schemas import (
     DEFAULT_COLLECTION_NAME,
     build_collection_schema,
     build_index_params,

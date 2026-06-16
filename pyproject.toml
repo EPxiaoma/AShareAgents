@@ -34,6 +34,8 @@ dependencies = [
     "typing-extensions>=4.14.0",
     "yfinance>=0.2.63",
     "streamlit>=1.45.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
     "fpdf2>=2.8.0",
     "python-dotenv>=1.1.0",
     "mootdx>=0.10.0",
@@ -53,6 +55,7 @@ google = ["langchain-google-genai>=4.0.0"]
 
 [project.scripts]
 ashareagents-web = "frontend.launch:main"
+ashareagents-api = "AShareAgents.api.launch:main"
 
 [tool.setuptools.packages.find]
 include = ["AShareAgents*", "frontend*"]
