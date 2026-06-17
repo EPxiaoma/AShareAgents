@@ -8,15 +8,33 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import fpdf as _fpdf_mod
-from fpdf import FPDF
+try:
+    import fpdf as _fpdf_mod
+    from fpdf import FPDF
+    _FPDF_IMPORT_ERROR: ImportError | None = None
+except ImportError as exc:
+    _fpdf_mod = None
+    _FPDF_IMPORT_ERROR = exc
+
+    class FPDF:  # type: ignore[no-redef]
+        pass
 
 
 # 这里提前识别 fpdf2 与废弃 pyfpdf 共用导入名的问题，避免中文渲染时才失败。
-_FPDF_VERSION = getattr(_fpdf_mod, "__version__", None) or getattr(_fpdf_mod, "FPDF_VERSION", "0")
+_FPDF_VERSION = (
+    getattr(_fpdf_mod, "__version__", None) or getattr(_fpdf_mod, "FPDF_VERSION", "0")
+    if _fpdf_mod is not None
+    else "0"
+)
 
 
 def _ensure_fpdf2() -> None:
+    if _FPDF_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            'PDF 导出需要安装 fpdf2。请执行：pip install "fpdf2>=2.8.0"，'
+            "或改用“下载 Markdown”导出。"
+        ) from _FPDF_IMPORT_ERROR
+
     try:
         major = int(str(_FPDF_VERSION).split(".")[0])
     except (ValueError, IndexError):

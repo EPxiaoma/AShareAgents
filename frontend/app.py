@@ -7,16 +7,16 @@ import sys
 import time
 from pathlib import Path
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from AShareAgents.logging_config import setup_logging
 
 setup_logging()
 
 import streamlit as st
 from dotenv import load_dotenv
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 load_dotenv(_PROJECT_ROOT / ".env")
 
