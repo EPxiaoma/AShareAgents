@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "simonlin1212", email = "simonlin1212@users.noreply.github.com" },
+    { name = "EPxiaoma", email = "wangbailin@163.com" },
 ]
 dependencies = [
     "langchain-core>=0.3.81",
@@ -51,7 +51,7 @@ Homepage = "https://github.com/EPxiaoma/AShareAgents"
 Repository = "https://github.com/EPxiaoma/AShareAgents"
 
 [project.optional-dependencies]
-google = ["langchain-google-genai>=4.0.0"]
+#google = ["langchain-google-genai>=4.0.0"]
 
 [project.scripts]
 ashareagents-web = "frontend.launch:main"
