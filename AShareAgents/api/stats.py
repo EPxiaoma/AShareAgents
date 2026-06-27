@@ -1,4 +1,4 @@
-"""Callbacks that collect LLM, tool, and token usage for API progress."""
+"""用于收集 API 进度中 LLM、工具和 token 用量的回调。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""In-memory analysis task registry used by the FastAPI process."""
+"""FastAPI 进程使用的内存分析任务注册表。"""
 
 from __future__ import annotations
 

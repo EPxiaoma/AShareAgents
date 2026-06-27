@@ -1,4 +1,4 @@
-"""CLI entry point for the FastAPI backend."""
+"""FastAPI 后端的 CLI 入口。"""
 
 from __future__ import annotations
 

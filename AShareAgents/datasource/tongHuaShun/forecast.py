@@ -1,4 +1,4 @@
-"""Tonghuashun consensus forecast access."""
+"""同花顺一致预期访问封装。"""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import requests
 
 
 def get(url, params=None, headers=None, timeout=15, **kwargs):
-    """GET a Tonghuashun endpoint."""
+    """请求同花顺 GET 端点。"""
     return requests.get(
         url, params=params, headers=headers, timeout=timeout, **kwargs
     )
 
 
 def get_eps_forecast(code: str) -> pd.DataFrame:
-    """Fetch the consensus EPS forecast table for a stock."""
+    """获取指定股票的一致预期 EPS 预测表。"""
     response = get(
         f"https://basic.10jqka.com.cn/new/{code}/worth.html",
         headers={

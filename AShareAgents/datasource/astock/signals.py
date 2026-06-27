@@ -1,4 +1,4 @@
-"""A-share thematic, capital-flow, and consensus signal adapters."""
+"""A 股题材、资金流和一致预期信号适配器。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .symbols import _normalize_ticker
 
 logger = logging.getLogger(__name__)
 
-# ---- 10. get_profit_forecast ----
+# ---- 10. 获取盈利预测（get_profit_forecast）----
 
 
 def get_profit_forecast(
@@ -111,7 +111,7 @@ def get_profit_forecast(
         return f"获取 {code} 盈利预测数据时出错：{str(e)}"
 
 
-# ---- 11. get_hot_stocks ----
+# ---- 11. 获取强势股（get_hot_stocks）----
 
 
 def get_hot_stocks(
@@ -191,7 +191,7 @@ def get_hot_stocks(
         return f"获取 {curr_date} 热门股票数据时出错：{str(e)}"
 
 
-# ---- 12. get_northbound_flow ----
+# ---- 12. 获取北向资金流（get_northbound_flow）----
 
 
 def _northbound_cache_path() -> str:
@@ -363,7 +363,7 @@ _BAIDU_PAE_HEADERS = {
 }
 
 
-# ---- 13. get_concept_blocks ----
+# ---- 13. 获取概念板块（get_concept_blocks）----
 
 
 def get_concept_blocks(
@@ -429,7 +429,7 @@ def get_concept_blocks(
         return f"获取 {code} 概念板块数据时出错：{str(e)}"
 
 
-# ---- 14. get_fund_flow ----
+# ---- 14. 获取资金流向（get_fund_flow）----
 
 
 def get_fund_flow(

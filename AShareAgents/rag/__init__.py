@@ -1,5 +1,3 @@
-"""AShareAgents 的公司资料与政策行业 RAG 模块。"""
-
 from .data_preparation import (
     COMPANY_OFFICIAL,
     POLICY_INDUSTRY,

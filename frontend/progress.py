@@ -86,7 +86,7 @@ class ProgressTracker:
             self.tokens_out = tok_out
 
     def update_from_api(self, snapshot: dict[str, Any]) -> None:
-        """Replace local display state with a backend task snapshot."""
+        """用后端任务快照替换本地展示状态。"""
         status = snapshot.get("status", "pending")
         stats = snapshot.get("stats") or {}
         with self._lock:

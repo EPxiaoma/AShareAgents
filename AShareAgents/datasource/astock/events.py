@@ -1,4 +1,4 @@
-"""Eastmoney-backed market event and cross-sectional signals."""
+"""基于东方财富的市场事件和横截面信号。"""
 
 from __future__ import annotations
 

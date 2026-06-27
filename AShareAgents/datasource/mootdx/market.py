@@ -1,4 +1,4 @@
-"""Low-level mootdx market-data access."""
+"""底层 mootdx 行情数据访问封装。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def get_client():
 
 
 def build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
-    """Load Shanghai and Shenzhen stock name/code mappings."""
+    """加载沪深股票名称/代码映射。"""
     name_to_code: dict[str, str] = {}
     code_to_name: dict[str, str] = {}
     client = get_client()

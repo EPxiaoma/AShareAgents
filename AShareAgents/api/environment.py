@@ -1,4 +1,4 @@
-"""Environment loading shared by all FastAPI startup paths."""
+"""所有 FastAPI 启动路径共享的环境加载逻辑。"""
 
 from __future__ import annotations
 
@@ -11,5 +11,5 @@ DOTENV_PATH = PROJECT_ROOT / ".env"
 
 
 def load_api_environment() -> bool:
-    """Load the project dotenv file without overriding process variables."""
+    """加载项目 dotenv 文件，但不覆盖已有进程变量。"""
     return load_dotenv(DOTENV_PATH, override=False)

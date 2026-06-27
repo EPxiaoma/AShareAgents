@@ -1,4 +1,4 @@
-"""FastAPI application factory for AShareAgents."""
+"""AShareAgents 的 FastAPI 应用工厂。"""
 
 from __future__ import annotations
 

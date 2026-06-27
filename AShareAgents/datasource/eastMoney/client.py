@@ -1,4 +1,4 @@
-"""Shared Eastmoney HTTP client with request throttling."""
+"""带请求节流的共享东方财富 HTTP 客户端。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ _lock = threading.Lock()
 
 
 def get(url, params=None, headers=None, timeout=15, **kwargs):
-    """GET an Eastmoney endpoint using the shared throttled session."""
+    """使用共享节流会话请求东方财富 GET 端点。"""
     global _last_call
     with _lock:
         wait = _minimum_interval - (time.monotonic() - _last_call)
@@ -41,7 +41,7 @@ def datacenter(
     sort_columns: str = "",
     sort_types: str = "-1",
 ) -> list[dict]:
-    """Query an Eastmoney datacenter report and return its rows."""
+    """查询东方财富数据中心报表并返回结果行。"""
     response = get(
         DATACENTER_URL,
         params={
@@ -62,7 +62,7 @@ def datacenter(
 
 
 def resolve_stock_code(keyword: str) -> str | None:
-    """Resolve a Chinese stock name through Eastmoney suggestions."""
+    """通过东方财富联想建议解析中文股票名称。"""
     response = get(
         "https://searchapi.eastmoney.com/api/suggest/get",
         params={

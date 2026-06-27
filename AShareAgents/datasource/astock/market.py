@@ -1,4 +1,4 @@
-"""A-share OHLCV market data and technical indicator adapters."""
+"""A 股 OHLCV 行情数据和技术指标适配器。"""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
 # 以下供应商方法必须与 interface.py 的 VENDOR_METHODS 签名保持一致。
 
 
-# ---- 1. get_stock_data ----
+# ---- 1. 获取行情数据（get_stock_data）----
 
 
 def get_stock_data(
@@ -121,7 +121,7 @@ def get_stock_data(
     return header + csv_out
 
 
-# ---- 2. get_indicators ----
+# ---- 2. 获取技术指标（get_indicators）----
 
 # 支持的技术指标及其说明
 _INDICATOR_DESCRIPTIONS = {

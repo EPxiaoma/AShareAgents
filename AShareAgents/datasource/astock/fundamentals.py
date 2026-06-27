@@ -1,4 +1,4 @@
-"""A-share fundamentals, financial reports, and shareholder data adapters."""
+"""A 股基本面、财务报告和股东数据适配器。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from .symbols import _get_prefix, _normalize_ticker
 
 logger = logging.getLogger(__name__)
 
-# ---- 3. get_fundamentals ----
+# ---- 3. 获取基本面（get_fundamentals）----
 
 
 def get_fundamentals(
@@ -209,7 +209,7 @@ def _get_fundamentals_impl(code: str) -> str:
         return f"获取 {code} 基本面数据时出错：{str(e)}"
 
 
-# ---- 4. get_balance_sheet ----
+# ---- 4. 获取资产负债表（get_balance_sheet）----
 
 
 def _sina_stock_code(code: str) -> str:
@@ -256,7 +256,7 @@ def get_balance_sheet(
         return f"获取 {code} 资产负债表数据时出错：{str(e)}"
 
 
-# ---- 5. get_cashflow ----
+# ---- 5. 获取现金流量表（get_cashflow）----
 
 
 def get_cashflow(
@@ -287,7 +287,7 @@ def get_cashflow(
         return f"获取 {code} 现金流量表数据时出错：{str(e)}"
 
 
-# ---- 6. get_income_statement ----
+# ---- 6. 获取利润表（get_income_statement）----
 
 
 def get_income_statement(
@@ -318,7 +318,7 @@ def get_income_statement(
         return f"获取 {code} 利润表数据时出错：{str(e)}"
 
 
-# ---- 9. get_insider_transactions ----
+# ---- 9. 获取股东/内部人活动（get_insider_transactions）----
 
 
 def get_insider_transactions(

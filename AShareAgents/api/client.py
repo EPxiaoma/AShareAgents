@@ -1,4 +1,4 @@
-"""Synchronous HTTP client used by the Streamlit frontend."""
+"""供 Streamlit 前端使用的同步 HTTP 客户端。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import requests
 
 
 class APIError(RuntimeError):
-    """Raised when the backend cannot fulfill a frontend request."""
+    """后端无法完成前端请求时抛出。"""
 
 
 class AShareAgentsAPIClient:

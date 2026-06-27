@@ -1,4 +1,4 @@
-"""Pydantic request and response models for the HTTP API."""
+"""HTTP API 的 Pydantic 请求与响应模型。"""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ class TaskStatus(str, Enum):
 
 
 class AnalysisConfig(BaseModel):
-    """Client-selectable analysis options.
+    """客户端可选择的分析选项。
 
-    Filesystem paths and other server-owned settings are intentionally omitted.
+    文件系统路径和其他服务端拥有的设置会被有意省略。
     """
 
     llm_provider: str = "minimax"

@@ -1,4 +1,4 @@
-"""Tencent Finance real-time quote access."""
+"""腾讯财经实时行情访问封装。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def _market_prefix(code: str) -> str:
 
 
 def get_quotes(codes: list[str]) -> dict[str, dict]:
-    """Fetch and parse real-time quotes from qt.gtimg.cn."""
+    """从 qt.gtimg.cn 获取并解析实时行情。"""
     symbols = [f"{_market_prefix(code)}{code}" for code in codes]
     request = urllib.request.Request("https://qt.gtimg.cn/q=" + ",".join(symbols))
     request.add_header("User-Agent", "Mozilla/5.0")

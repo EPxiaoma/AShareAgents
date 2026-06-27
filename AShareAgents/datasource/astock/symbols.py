@@ -1,4 +1,4 @@
-"""A-share ticker normalization and name/code resolution."""
+"""A 股股票代码规范化与名称/代码解析。"""
 
 from __future__ import annotations
 

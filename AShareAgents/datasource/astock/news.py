@@ -1,4 +1,4 @@
-"""A-share company and market-news aggregation."""
+"""A 股公司新闻和市场新闻聚合。"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ _disabled_sources: set[str] = set()
 
 
 def fetch_eastmoney_company_news(code: str, page_size: int = 20) -> list[dict]:
-    """Fetch company news from Eastmoney's search endpoint."""
+    """从东方财富搜索端点获取公司新闻。"""
     inner_param = {
         "uid": "",
         "keyword": code,
@@ -75,7 +75,7 @@ def fetch_eastmoney_company_news(code: str, page_size: int = 20) -> list[dict]:
 
 
 def fetch_sina_company_news(code: str, page_size: int = 20) -> list[dict]:
-    """Fetch company news from Sina as a fallback source."""
+    """从新浪获取公司新闻作为回退数据源。"""
     prefix = "sh" if code.startswith(("6", "9")) else "sz"
     response = sina_get(
         "https://vip.stock.finance.sina.com.cn/corp/view/"
@@ -162,7 +162,7 @@ def get_global_news(
     *,
     warning_once: Callable[..., None],
 ) -> str:
-    """Aggregate global financial news from CLS and Eastmoney."""
+    """聚合财联社和东方财富的全球财经新闻。"""
     if look_back_days < 0:
         raise ValueError("look_back_days must be non-negative")
     if limit <= 0:

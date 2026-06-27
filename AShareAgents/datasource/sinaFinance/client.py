@@ -1,4 +1,4 @@
-"""Sina Finance HTTP endpoints."""
+"""新浪财经 HTTP 端点封装。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 
 
 def get(url, params=None, headers=None, timeout=15, **kwargs):
-    """GET a Sina Finance endpoint."""
+    """请求新浪财经 GET 端点。"""
     return requests.get(
         url, params=params, headers=headers, timeout=timeout, **kwargs
     )
@@ -28,7 +28,7 @@ def _prefix(code: str) -> str:
 def get_daily_kline(
     code: str, start_date: str | None = None, end_date: str | None = None
 ) -> pd.DataFrame:
-    """Fetch normalized daily OHLCV bars."""
+    """获取标准化的日线 OHLCV 数据。"""
     response = get(
         "http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
         "CN_MarketData.getKLineData",
@@ -66,7 +66,7 @@ def get_daily_kline(
 def get_financial_report(
     code: str, report_type: str, freq: str, curr_date: str | None = None
 ) -> pd.DataFrame:
-    """Fetch a normalized Sina balance sheet, income statement, or cash flow."""
+    """获取标准化的新浪资产负债表、利润表或现金流量表。"""
     source_type = {
         "资产负债表": "fzb",
         "利润表": "lrb",
