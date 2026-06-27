@@ -1,4 +1,4 @@
-"""Analysis execution service owned by the FastAPI backend."""
+"""FastAPI 后端负责的分析执行服务。"""
 
 from __future__ import annotations
 
@@ -68,7 +68,11 @@ def run_analysis(job: AnalysisJob, config: dict[str, Any]) -> None:
     job.mark_running()
     stats = StatsCallbackHandler()
     graph = AShareAgentsGraph(debug=True, config=config, callbacks=[stats])
-    init_state = graph.propagator.create_initial_state(job.ticker, job.trade_date)
+    graph._resolve_pending_entries(job.ticker)
+    past_context = graph.memory_log.get_past_context(job.ticker)
+    init_state = graph.propagator.create_initial_state(
+        job.ticker, job.trade_date, past_context=past_context
+    )
     args = graph.propagator.get_graph_args(callbacks=[stats])
     last_chunk: dict[str, Any] = {}
 
