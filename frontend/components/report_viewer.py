@@ -22,12 +22,12 @@ def _signal_style(signal: str) -> tuple[str, str]:
     if s == "overweight":
         return "#84cc16", "增持"
     if s == "hold":
-        return "#fbbf24", "持有"
+        return "#eab308", "持有"
     if s == "underweight":
         return "#f97316", "减持"
     if s == "sell":
         return "#ef4444", "卖出"
-    return "#a3a3a3", "未知"
+    return "#8b98a8", "未知"
 
 
 _ANALYST_SECTIONS = [
@@ -39,6 +39,12 @@ _ANALYST_SECTIONS = [
     ("hot_money_report", "🔥 游资追踪"),
     ("lockup_report", "🔒 解禁/减持"),
 ]
+
+
+def _count_available_sections(final_state: dict[str, Any]) -> int:
+    keys = [key for key, _ in _ANALYST_SECTIONS]
+    extra = ["investment_plan", "trader_investment_decision", "risk_debate_state", "investment_debate_state"]
+    return sum(1 for key in keys + extra if final_state.get(key))
 
 
 def render_report(
@@ -54,43 +60,66 @@ def render_report(
     safe_signal = html.escape(signal.upper())
     safe_ticker = html.escape(str(ticker))
     safe_trade_date = html.escape(str(trade_date))
+    section_count = _count_available_sections(final_state)
 
-    stats_html = ""
+    elapsed_label = "历史报告"
     if elapsed is not None:
         m, s = divmod(int(elapsed), 60)
-        stats_html = f'<div style="font-size:0.9rem; color:#888; margin-top:0.3rem;">耗时 {m}:{s:02d}</div>'
+        elapsed_label = f"耗时 {m}:{s:02d}"
 
-    st.markdown(
+    st.html(
         f"""
-        <div style="
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 2rem;
-            text-align: center;
-            margin: 1rem 0 2rem;
-        ">
-            <div style="font-size:0.9rem; color:#888; letter-spacing:2px;">交易信号</div>
-            <div style="font-size:3.5rem; font-weight:900; color:{color}; margin:0.3rem 0;">
-                {safe_signal}
+        <div class="as-topbar">
+            <div>
+                <div class="as-kicker">FINAL RESEARCH MEMO</div>
+                <div class="as-title">{safe_ticker} 投研结论</div>
+                <div class="as-subtitle">分析日期：{safe_trade_date} · {elapsed_label}</div>
             </div>
-            <div style="font-size:1.2rem; color:#f5f1eb;">
-                {safe_ticker} · {safe_trade_date}
+            <div class="as-session">
+                <div class="as-pill">章节 {section_count}</div>
+                <div class="as-pill">AI 自动生成</div>
+                <div class="as-pill">可导出</div>
             </div>
-            {stats_html}
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
-    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
+    st.html(
+        f"""
+        <div class="as-grid">
+            <div class="as-panel">
+                <div class="as-panel-title">
+                    <span>交易信号</span>
+                    <span class="as-muted">Portfolio Manager Decision</span>
+                </div>
+                <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:1rem;">
+                    <div>
+                        <div style="font-size:3rem; line-height:1; font-weight:800; color:{color};">{safe_signal}</div>
+                        <div style="color:#dbe3ed; margin-top:0.35rem; font-weight:700;">{html.escape(cn_signal)}</div>
+                    </div>
+                    <div style="text-align:right; color:#8b98a8; font-size:0.86rem; line-height:1.7;">
+                        标的：{safe_ticker}<br>
+                        日期：{safe_trade_date}<br>
+                        {elapsed_label}
+                    </div>
+                </div>
+            </div>
+            <div class="as-panel">
+                <div class="as-panel-title">
+                    <span>报告操作</span>
+                    <span class="as-muted">Export</span>
+                </div>
+                <div class="as-muted" style="line-height:1.7;">下载研究备忘录用于归档、复盘或二次审阅。PDF 生成失败时不会影响报告阅读。</div>
+            </div>
+        </div>
+        """
+    )
 
-    # 导出 Markdown 无字体依赖；PDF 延迟生成，失败时不影响结果页面。
-    col_md, col_pdf, col_spacer = st.columns([1, 1, 2])
+    col_md, col_pdf, _ = st.columns([1, 1, 2])
     with col_md:
         md_text = generate_markdown(final_state, ticker, trade_date, signal)
         st.download_button(
-            "📥 下载 Markdown",
+            "下载 Markdown",
             data=md_text.encode("utf-8"),
             file_name=f"AShareAgents-Astock_{ticker}_{trade_date}.md",
             mime="text/markdown",
@@ -100,7 +129,7 @@ def render_report(
         try:
             pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
             st.download_button(
-                "📄 下载 PDF",
+                "下载 PDF",
                 data=pdf_bytes,
                 file_name=f"AShareAgents-Astock_{ticker}_{trade_date}.pdf",
                 mime="application/pdf",
@@ -108,22 +137,18 @@ def render_report(
             )
         except Exception as exc:  # noqa: BLE001 - PDF 导出异常不得中断结果展示。
             st.button(
-                "📄 PDF 不可用",
+                "PDF 不可用",
                 disabled=True,
                 use_container_width=True,
                 help=f"PDF 生成失败，请改用 Markdown 导出。原因：{exc}",
             )
 
-    st.markdown("---")
-
     inv_plan = final_state.get("investment_plan", "")
     if inv_plan:
-        st.markdown("### 👔 最终投资建议")
+        st.markdown("### 最终投资建议")
         st.markdown(_strip_think(str(inv_plan)))
-        st.markdown("---")
 
-    st.markdown("### 📊 分析师报告")
-
+    st.markdown("### 分析师报告")
     for key, title in _ANALYST_SECTIONS:
         content = final_state.get(key, "")
         if not content:
@@ -133,7 +158,7 @@ def render_report(
 
     debate = final_state.get("investment_debate_state")
     if debate and isinstance(debate, dict):
-        st.markdown("### ⚔️ 多空辩论")
+        st.markdown("### 多空辩论")
         tab_bull, tab_bear, tab_judge = st.tabs(["多方", "空方", "研究经理"])
         with tab_bull:
             st.markdown(_strip_think(debate.get("bull_history", "") or "无数据"))
@@ -144,12 +169,12 @@ def render_report(
 
     trader_decision = final_state.get("trader_investment_decision", "")
     if trader_decision:
-        with st.expander("💹 交易员决策", expanded=False):
+        with st.expander("交易员决策", expanded=False):
             st.markdown(_strip_think(str(trader_decision)))
 
     risk = final_state.get("risk_debate_state")
     if risk and isinstance(risk, dict):
-        st.markdown("### 🛡️ 风控评估")
+        st.markdown("### 风控评估")
         tab_agg, tab_con, tab_neu, tab_rj = st.tabs(["激进", "保守", "中性", "风控决策"])
         with tab_agg:
             st.markdown(_strip_think(risk.get("aggressive_history", "") or "无数据"))
@@ -162,5 +187,7 @@ def render_report(
 
     dqs = final_state.get("data_quality_summary", "")
     if dqs:
-        with st.expander("✅ 数据质量", expanded=False):
+        with st.expander("数据质量", expanded=False):
             st.markdown(str(dqs))
+
+    st.caption("风险提示：本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
